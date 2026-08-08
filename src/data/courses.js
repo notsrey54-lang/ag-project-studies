@@ -1,0 +1,192 @@
+export const SUBJECTS = [
+  {
+    id: 'BUC111',
+    code: 'BUC111',
+    name: 'Business Communication',
+    shortName: 'Business Comms',
+    description: 'Write clear, respectful, and persuasive business messages with confidence.',
+    eyebrow: 'Your communication toolkit',
+    color: 'gold',
+    materialType: 'legacy',
+    modules: [
+      { id: 'buc-chapter-7', title: 'Chapter 7', subtitle: 'Routine and positive messages', duration: '18 min' },
+      { id: 'buc-chapter-8', title: 'Chapter 8', subtitle: 'Negative messages', duration: '22 min' },
+      { id: 'buc-chapter-9', title: 'Chapter 9', subtitle: 'Persuasive messages', duration: '24 min' },
+      { id: 'buc-compare', title: 'Final comparison', subtitle: 'Choose the right message approach', duration: '8 min' },
+    ],
+    flashcards: [
+      {
+        id: 'buc-direct-request',
+        prompt: 'What are the three parts of a routine request?',
+        answer: 'Opening: state the request clearly. Body: give details and justification. Close: ask for a specific action and, when useful, a deadline.',
+        label: 'Chapter 7',
+      },
+      {
+        id: 'buc-positive-message',
+        prompt: 'What is the normal structure of a positive message?',
+        answer: 'Use the direct approach: begin with the good news or main idea, give supporting details, then close courteously.',
+        label: 'Chapter 7',
+      },
+      {
+        id: 'buc-indirect',
+        prompt: 'When is the indirect approach useful for bad news?',
+        answer: 'Use it when the news is unexpected, emotionally important, or high-stakes. Start with a relevant buffer, explain reasons, state the bad news, and close respectfully.',
+        label: 'Chapter 8',
+      },
+      {
+        id: 'buc-aida',
+        prompt: 'What does AIDA stand for?',
+        answer: 'Attention, Interest, Desire, and Action. It gives persuasive messages a logical path from interest to a clear request.',
+        label: 'Chapter 9',
+      },
+      {
+        id: 'buc-logic',
+        prompt: 'Which appeal is usually primary in business persuasion?',
+        answer: 'Logical appeal. It relies on facts, evidence, and reasoning, while emotional appeal can make the audience more receptive.',
+        label: 'Chapter 9',
+      },
+    ],
+    quiz: [
+      {
+        id: 'buc-q1',
+        prompt: 'A customer is angry about a denied claim. Which approach is usually best?',
+        options: ['Direct approach with no explanation', 'Indirect approach with calm reasons and a respectful close', 'AIDA with a sales offer', 'Ignore the customer until they contact again'],
+        answer: 1,
+        explanation: 'A refused claim is emotionally sensitive, so a thoughtful indirect approach helps protect goodwill.',
+      },
+      {
+        id: 'buc-q2',
+        prompt: 'Which item belongs in the Action stage of AIDA?',
+        options: ['A surprising question', 'Details about benefits', 'A specific request with a deadline when appropriate', 'A list of emotional appeals'],
+        answer: 2,
+        explanation: 'Action tells the reader exactly what to do and makes the next step simple.',
+      },
+      {
+        id: 'buc-q3',
+        prompt: 'What should a sincere apology avoid?',
+        options: ['Taking responsibility', 'A conditional statement such as “if anyone was offended”', 'Choosing the right channel', 'Responding quickly'],
+        answer: 1,
+        explanation: 'A conditional apology sounds evasive instead of taking real responsibility.',
+      },
+    ],
+  },
+  {
+    id: 'ECO101',
+    code: 'ECO101',
+    name: 'Principles of Economics',
+    shortName: 'Economics',
+    description: 'Build a clear foundation in markets, supply, demand, and economic choices.',
+    eyebrow: 'A practical economics starter',
+    color: 'green',
+    materialType: 'structured',
+    modules: [
+      { id: 'eco-scarcity', title: 'Core idea', subtitle: 'Scarcity and opportunity cost', duration: '12 min' },
+      { id: 'eco-demand', title: 'Demand', subtitle: 'Price changes and demand shifts', duration: '16 min' },
+      { id: 'eco-supply', title: 'Supply', subtitle: 'Price changes and supply shifts', duration: '16 min' },
+      { id: 'eco-equilibrium', title: 'Equilibrium', subtitle: 'How markets meet', duration: '14 min' },
+    ],
+    materials: [
+      {
+        id: 'eco-core',
+        title: 'The economic problem',
+        summary: 'Economics begins with scarcity: people have unlimited wants but limited resources.',
+        points: [
+          ['Scarcity', 'Resources such as time, money, and materials are limited.'],
+          ['Choice', 'Because resources are limited, every decision means choosing one option over another.'],
+          ['Opportunity cost', 'The value of the next best option you give up.'],
+        ],
+        example: 'If you spend two hours studying ECO101 instead of working, the income you could have earned is part of the opportunity cost.',
+      },
+      {
+        id: 'eco-demand',
+        title: 'Demand: movement versus shift',
+        summary: 'Demand shows how much consumers are willing and able to buy at different prices.',
+        points: [
+          ['Movement along the curve', 'Only the product’s own price changes. A lower price normally causes a higher quantity demanded.'],
+          ['Demand shift', 'A non-price factor changes, such as income, taste, population, expectations, or the price of a related good.'],
+          ['Normal good', 'Demand rises when consumer income rises.'],
+        ],
+        example: 'If umbrellas fall from 3 KD to 1 KD and more people buy them, that is a movement along demand. If it starts raining while price stays 3 KD, demand shifts right.',
+      },
+      {
+        id: 'eco-supply',
+        title: 'Supply: movement versus shift',
+        summary: 'Supply shows how much producers are willing and able to sell at different prices.',
+        points: [
+          ['Movement along the curve', 'Only the product’s own price changes. A higher price normally causes a higher quantity supplied.'],
+          ['Supply shift', 'A non-price factor changes, such as input costs, technology, taxes, expectations, or the number of sellers.'],
+          ['Lower production cost', 'Usually shifts supply right because producing becomes easier or cheaper.'],
+        ],
+        example: 'If coffee prices increase, coffee shops may offer more cups: that is a movement along supply. If a new machine makes coffee cheaper to produce, supply shifts right.',
+      },
+      {
+        id: 'eco-equilibrium',
+        title: 'Market equilibrium',
+        summary: 'Equilibrium is where quantity demanded equals quantity supplied.',
+        points: [
+          ['Shortage', 'At a price below equilibrium, buyers want more than sellers offer. Price tends to rise.'],
+          ['Surplus', 'At a price above equilibrium, sellers offer more than buyers want. Price tends to fall.'],
+          ['New equilibrium', 'A demand or supply shift changes the equilibrium price, quantity, or both.'],
+        ],
+        example: 'If a popular new trend increases demand for a product while supply stays the same, equilibrium price and quantity usually rise.',
+      },
+    ],
+    flashcards: [
+      {
+        id: 'eco-scarcity',
+        prompt: 'What is scarcity?',
+        answer: 'Scarcity means resources are limited while human wants are unlimited, so choices must be made.',
+        label: 'Core idea',
+      },
+      {
+        id: 'eco-opportunity',
+        prompt: 'What is opportunity cost?',
+        answer: 'The value of the next best alternative you give up when making a choice.',
+        label: 'Core idea',
+      },
+      {
+        id: 'eco-demand-move',
+        prompt: 'What causes a movement along the demand curve?',
+        answer: 'A change in the good’s own price only.',
+        label: 'Demand',
+      },
+      {
+        id: 'eco-shift',
+        prompt: 'Name two causes of a demand shift.',
+        answer: 'Examples include a change in income, tastes, population, expectations, or the price of a related good.',
+        label: 'Demand',
+      },
+      {
+        id: 'eco-equilibrium',
+        prompt: 'What happens in a shortage?',
+        answer: 'Quantity demanded is greater than quantity supplied, so price tends to rise toward equilibrium.',
+        label: 'Equilibrium',
+      },
+    ],
+    quiz: [
+      {
+        id: 'eco-q1',
+        prompt: 'An umbrella price falls from 3 KD to 1 KD, and more umbrellas are bought. What happened?',
+        options: ['A rightward demand shift', 'An increase in quantity demanded', 'A leftward supply shift', 'An increase in demand'],
+        answer: 1,
+        explanation: 'Only the price changed, so this is a movement along the demand curve: quantity demanded increases.',
+      },
+      {
+        id: 'eco-q2',
+        prompt: 'Which change is most likely to shift supply right?',
+        options: ['A higher selling price', 'Higher input costs', 'Improved production technology', 'A decrease in quantity demanded'],
+        answer: 2,
+        explanation: 'Better technology makes production more efficient, so firms can supply more at every price.',
+      },
+      {
+        id: 'eco-q3',
+        prompt: 'At a price above equilibrium, a market typically has a…',
+        options: ['Shortage', 'Surplus', 'Demand increase', 'Supply decrease'],
+        answer: 1,
+        explanation: 'At a high price, sellers offer more than buyers want to buy, creating surplus.',
+      },
+    ],
+  },
+];
+
+export const getSubject = (subjectId) => SUBJECTS.find((subject) => subject.id === subjectId);
