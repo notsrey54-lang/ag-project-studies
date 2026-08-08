@@ -18,7 +18,6 @@ function SubjectButton({ subject, selectedSubject, profile, onSelect }) {
         <strong>{subject.code}</strong>
         <small>{subject.shortName}</small>
       </span>
-      <ProgressRing percent={progress.percent} compact />
     </button>
   );
 }
