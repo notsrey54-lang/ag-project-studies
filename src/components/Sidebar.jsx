@@ -62,12 +62,9 @@ export function Sidebar({ selectedSubject, profile, onSelect, onHome, mobileOpen
                 <button type="button" className="text-button" onClick={onSignOut}>Sign out</button>
               </div>
             ) : (
-              <>
-                <button type="button" className="sync-card__button" onClick={onSignIn}>Sign in with GitHub</button>
-<>
-  <button type="button" className="sync-card__button" onClick={onSignIn}>Sign in with GitHub</button>
-</>              </>
-            )}
+  <>
+  </>
+)}
           </section>
 
           <button type="button" className="theme-button" onClick={onThemeToggle}>
