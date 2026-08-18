@@ -63,7 +63,6 @@ export function Sidebar({ selectedSubject, profile, onSelect, onHome, mobileOpen
               </div>
             ) : (
               <>
-                <button type="button" className="sync-card__button" onClick={onSignIn}>Sign in with GitHub</button>
                 <p className="sync-card__privacy">Sync uses a secret GitHub Gist. Avoid putting sensitive information in notes.</p>
               </>
             )}
