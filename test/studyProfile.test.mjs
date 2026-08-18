@@ -4,6 +4,8 @@ import {
   createEmptyProfile,
   getSubjectProgress,
   mergeProfiles,
+  recordExamAttempt,
+  recordQuizResult,
   recordQuizAttempt,
   toggleBookmark,
   toggleModule,
@@ -43,4 +45,23 @@ test('cross-device merge preserves different completed modules in one subject', 
   const merged = mergeProfiles(local, remote);
   assert.deepEqual(merged.progress.BUC111, { one: true, two: true });
   assert.deepEqual(merged.bookmarks.BUC111, { one: true, two: true });
+});
+
+test('wrong quiz answers enter the mistake book and exam attempts are retained', () => {
+  let profile = createEmptyProfile();
+  const question = {
+    id: 'q1',
+    prompt: 'Which option is correct?',
+    options: ['A', 'B'],
+    answer: 1,
+    explanation: 'B is correct.',
+  };
+
+  profile = recordQuizResult(profile, 'BUC111', question, 0);
+  profile = recordExamAttempt(profile, 'BUC111', { score: 2, total: 3 });
+
+  assert.equal(profile.mistakes.BUC111.length, 1);
+  assert.equal(profile.mistakes.BUC111[0].correctAnswer, 1);
+  assert.equal(profile.quizAttempts.BUC111.attempted, 1);
+  assert.equal(profile.examAttempts.BUC111[0].score, 2);
 });

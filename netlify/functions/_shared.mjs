@@ -142,3 +142,22 @@ export const validProfile = (profile) => {
     return false;
   }
 };
+
+export const validContentDocument = (document) => {
+  if (!document || typeof document !== 'object' || Array.isArray(document)) return false;
+  if (document.version !== 1 || !Array.isArray(document.subjects) || document.subjects.length > 100) return false;
+  try {
+    return JSON.stringify(document).length <= 900000 && document.subjects.every((subject) => (
+      subject && typeof subject === 'object'
+      && typeof subject.id === 'string'
+      && typeof subject.code === 'string'
+      && typeof subject.name === 'string'
+      && Array.isArray(subject.modules)
+      && Array.isArray(subject.materials)
+      && Array.isArray(subject.flashcards)
+      && Array.isArray(subject.quiz)
+    ));
+  } catch {
+    return false;
+  }
+};

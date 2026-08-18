@@ -5,6 +5,7 @@ process.env.SESSION_SECRET = 'test-only-session-secret-that-is-long-enough-for-a
 const { decryptSession, encryptSession, validProfile } = await import('../netlify/functions/_shared.mjs');
 const authFunction = (await import('../netlify/functions/auth.mjs')).default;
 const studyDataFunction = (await import('../netlify/functions/study-data.mjs')).default;
+const contentPublishFunction = (await import('../netlify/functions/content-publish.mjs')).default;
 
 test('the server keeps a GitHub access token inside an encrypted session value', () => {
   const payload = { accessToken: 'github-token', login: 'student', name: 'Study Student' };
@@ -78,4 +79,51 @@ test('an authenticated learner profile is saved in a secret GitHub Gist', async 
   assert.equal(calls[0].options.headers.Authorization, 'Bearer github-token');
   assert.equal(JSON.parse(calls[1].options.body).public, false);
   assert.match(JSON.parse(calls[1].options.body).description, /secret/);
+});
+
+test('content publishing refuses unauthenticated or unconfigured requests', async (t) => {
+  const originalOwner = process.env.CONTENT_REPO_OWNER;
+  const originalRepo = process.env.CONTENT_REPO_NAME;
+  const originalAdmin = process.env.ADMIN_GITHUB_LOGIN;
+  delete process.env.CONTENT_REPO_OWNER;
+  delete process.env.CONTENT_REPO_NAME;
+  delete process.env.ADMIN_GITHUB_LOGIN;
+  t.after(() => {
+    if (originalOwner === undefined) delete process.env.CONTENT_REPO_OWNER;
+    else process.env.CONTENT_REPO_OWNER = originalOwner;
+    if (originalRepo === undefined) delete process.env.CONTENT_REPO_NAME;
+    else process.env.CONTENT_REPO_NAME = originalRepo;
+    if (originalAdmin === undefined) delete process.env.ADMIN_GITHUB_LOGIN;
+    else process.env.ADMIN_GITHUB_LOGIN = originalAdmin;
+  });
+
+  const response = await contentPublishFunction(new Request('https://study.example/.netlify/functions/content-publish', { method: 'PUT', body: JSON.stringify({ document: { version: 1, subjects: [] } }) }));
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /not configured/i);
+});
+
+test('content publishing limits access to the configured GitHub admin', async (t) => {
+  const originalOwner = process.env.CONTENT_REPO_OWNER;
+  const originalRepo = process.env.CONTENT_REPO_NAME;
+  const originalAdmin = process.env.ADMIN_GITHUB_LOGIN;
+  process.env.CONTENT_REPO_OWNER = 'owner';
+  process.env.CONTENT_REPO_NAME = 'repo';
+  process.env.ADMIN_GITHUB_LOGIN = 'admin';
+  t.after(() => {
+    if (originalOwner === undefined) delete process.env.CONTENT_REPO_OWNER;
+    else process.env.CONTENT_REPO_OWNER = originalOwner;
+    if (originalRepo === undefined) delete process.env.CONTENT_REPO_NAME;
+    else process.env.CONTENT_REPO_NAME = originalRepo;
+    if (originalAdmin === undefined) delete process.env.ADMIN_GITHUB_LOGIN;
+    else process.env.ADMIN_GITHUB_LOGIN = originalAdmin;
+  });
+
+  const session = encryptSession({ accessToken: 'github-token', login: 'student', name: 'Student' });
+  const response = await contentPublishFunction(new Request('https://study.example/.netlify/functions/content-publish', {
+    method: 'PUT',
+    headers: { Cookie: `ag_project_session=${encodeURIComponent(session)}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: { version: 1, subjects: [] } }),
+  }));
+  assert.equal(response.status, 403);
+  assert.match((await response.json()).error, /not allowed/i);
 });

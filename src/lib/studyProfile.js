@@ -8,6 +8,8 @@ export const createEmptyProfile = () => ({
   bookmarks: {},
   flashcardReviews: {},
   quizAttempts: {},
+  mistakes: {},
+  examAttempts: {},
 });
 
 export const normalizeProfile = (candidate) => {
@@ -23,6 +25,8 @@ export const normalizeProfile = (candidate) => {
     bookmarks: typeof candidate.bookmarks === 'object' && candidate.bookmarks ? candidate.bookmarks : {},
     flashcardReviews: typeof candidate.flashcardReviews === 'object' && candidate.flashcardReviews ? candidate.flashcardReviews : {},
     quizAttempts: typeof candidate.quizAttempts === 'object' && candidate.quizAttempts ? candidate.quizAttempts : {},
+    mistakes: typeof candidate.mistakes === 'object' && candidate.mistakes ? candidate.mistakes : {},
+    examAttempts: typeof candidate.examAttempts === 'object' && candidate.examAttempts ? candidate.examAttempts : {},
   };
 };
 
@@ -76,16 +80,25 @@ export const saveNote = (profile, subjectId, note) => stamp({
   },
 });
 
-export const reviewFlashcard = (profile, subjectId, cardId) => stamp({
+export const reviewFlashcard = (profile, subjectId, cardId, rating = 'good') => stamp({
   ...profile,
   flashcardReviews: {
     ...profile.flashcardReviews,
     [subjectId]: {
       ...(profile.flashcardReviews[subjectId] || {}),
-      [cardId]: new Date().toISOString(),
+      [cardId]: {
+        reviewedAt: new Date().toISOString(),
+        rating,
+      },
     },
   },
 });
+
+export const getFlashcardReview = (profile, subjectId, cardId) => {
+  const review = profile.flashcardReviews[subjectId]?.[cardId];
+  if (!review) return null;
+  return typeof review === 'string' ? { reviewedAt: review, rating: 'good' } : review;
+};
 
 export const recordQuizAttempt = (profile, subjectId, wasCorrect) => {
   const prior = profile.quizAttempts[subjectId] || { attempted: 0, correct: 0 };
@@ -100,6 +113,54 @@ export const recordQuizAttempt = (profile, subjectId, wasCorrect) => {
     },
   });
 };
+
+export const recordQuizResult = (profile, subjectId, question, selectedIndex) => {
+  const wasCorrect = selectedIndex === question.answer;
+  const next = recordQuizAttempt(profile, subjectId, wasCorrect);
+  if (wasCorrect) return next;
+
+  const priorMistakes = Array.isArray(next.mistakes[subjectId]) ? next.mistakes[subjectId] : [];
+  const mistake = {
+    id: `${question.id}-${Date.now()}`,
+    questionId: question.id,
+    prompt: question.prompt,
+    promptAr: question.promptAr || '',
+    options: question.options,
+    optionsAr: question.optionsAr || [],
+    correctAnswer: question.answer,
+    selectedAnswer: selectedIndex,
+    explanation: question.explanation || '',
+    explanationAr: question.explanationAr || '',
+    missedAt: new Date().toISOString(),
+  };
+
+  return stamp({
+    ...next,
+    mistakes: {
+      ...next.mistakes,
+      [subjectId]: [mistake, ...priorMistakes.filter((item) => item.questionId !== question.id)].slice(0, 100),
+    },
+  });
+};
+
+export const clearMistake = (profile, subjectId, mistakeId) => stamp({
+  ...profile,
+  mistakes: {
+    ...profile.mistakes,
+    [subjectId]: (profile.mistakes[subjectId] || []).filter((mistake) => mistake.id !== mistakeId),
+  },
+});
+
+export const recordExamAttempt = (profile, subjectId, result) => stamp({
+  ...profile,
+  examAttempts: {
+    ...profile.examAttempts,
+    [subjectId]: [
+      { ...result, id: `${subjectId}-exam-${Date.now()}`, completedAt: new Date().toISOString() },
+      ...(profile.examAttempts[subjectId] || []),
+    ].slice(0, 20),
+  },
+});
 
 export const getSubjectProgress = (profile, subject) => {
   const total = subject.modules.length;
@@ -120,6 +181,14 @@ const mergeSubjectMaps = (olderMap, newerMap) => Object.fromEntries(
   ]),
 );
 
+const mergeSubjectArrays = (olderMap, newerMap) => Object.fromEntries(
+  [...new Set([...Object.keys(olderMap || {}), ...Object.keys(newerMap || {})])].map((subjectId) => {
+    const items = [...(olderMap?.[subjectId] || []), ...(newerMap?.[subjectId] || [])];
+    const unique = new Map(items.map((item, index) => [item.id || `${subjectId}-${index}`, item]));
+    return [subjectId, [...unique.values()].sort((left, right) => String(right.completedAt || right.missedAt || '').localeCompare(String(left.completedAt || left.missedAt || ''))).slice(0, 100)];
+  }),
+);
+
 export const mergeProfiles = (localProfile, remoteProfile) => {
   const local = normalizeProfile(localProfile);
   const remote = normalizeProfile(remoteProfile);
@@ -135,6 +204,8 @@ export const mergeProfiles = (localProfile, remoteProfile) => {
     bookmarks: mergeSubjectMaps(older.bookmarks, newer.bookmarks),
     flashcardReviews: mergeSubjectMaps(older.flashcardReviews, newer.flashcardReviews),
     quizAttempts: { ...older.quizAttempts, ...newer.quizAttempts },
+    mistakes: mergeSubjectArrays(older.mistakes, newer.mistakes),
+    examAttempts: mergeSubjectArrays(older.examAttempts, newer.examAttempts),
   });
 };
 

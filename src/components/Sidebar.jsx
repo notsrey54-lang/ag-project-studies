@@ -1,8 +1,7 @@
-import { SUBJECTS } from '../data/courses';
+import { localizeField } from '../lib/contentModel';
 import { getSubjectProgress } from '../lib/studyProfile';
-import { ProgressRing } from './ProgressRing';
 
-function SubjectButton({ subject, selectedSubject, profile, onSelect }) {
+function SubjectButton({ subject, selectedSubject, profile, onSelect, language }) {
   const progress = getSubjectProgress(profile, subject);
   const isSelected = selectedSubject === subject.id;
 
@@ -16,13 +15,14 @@ function SubjectButton({ subject, selectedSubject, profile, onSelect }) {
       <span className="subject-button__icon" aria-hidden="true">{subject.id === 'BUC111' ? '✦' : '◒'}</span>
       <span className="subject-button__copy">
         <strong>{subject.code}</strong>
-        <small>{subject.shortName}</small>
+        <small>{localizeField(subject.shortName, subject.shortNameAr, language)}</small>
       </span>
+      <span className="subject-button__meta">{progress.completed}/{progress.total}</span>
     </button>
   );
 }
 
-export function Sidebar({ selectedSubject, profile, onSelect, onHome, mobileOpen, onClose, theme, onThemeToggle, session, onSignIn, onSignOut, onSync }) {
+export function Sidebar({ subjects, selectedSubject, profile, onSelect, onHome, onOpenAdmin, mobileOpen, onClose, theme, onThemeToggle, language, onLanguageToggle }) {
   return (
     <>
       <button className={`sidebar-backdrop ${mobileOpen ? 'sidebar-backdrop--visible' : ''}`} aria-label="Close subject menu" onClick={onClose} />
@@ -41,31 +41,24 @@ export function Sidebar({ selectedSubject, profile, onSelect, onHome, mobileOpen
         </div>
 
         <nav className="subject-list" aria-label="Subjects">
-          {SUBJECTS.map((subject) => (
-            <SubjectButton key={subject.id} subject={subject} selectedSubject={selectedSubject} profile={profile} onSelect={onSelect} />
+          {subjects.map((subject) => (
+            <SubjectButton key={subject.id} subject={subject} selectedSubject={selectedSubject} profile={profile} onSelect={onSelect} language={language} />
           ))}
         </nav>
 
         <div className="sidebar__lower">
-          <section className="sync-card" aria-live="polite">
+          <section className="sync-card sync-card--local" aria-live="polite">
             <div className="sync-card__top">
-              <span className="sync-card__icon" aria-hidden="true">{session.status === 'signed-in' || session.status === 'syncing' ? '☁' : '⌂'}</span>
+              <span className="sync-card__icon" aria-hidden="true">⌂</span>
               <div>
-                <strong>{session.status === 'signed-in' || session.status === 'syncing' ? 'Study sync' : 'This device'}</strong>
-                <p>{session.message}</p>
+                <strong>This device</strong>
+                <p>Your progress is saved automatically on this device.</p>
               </div>
             </div>
-            {session.status === 'signed-in' || session.status === 'syncing' ? (
-              <div className="sync-card__actions">
-                <button type="button" className="text-button" onClick={onSync}>Sync now</button>
-                <button type="button" className="text-button" onClick={onSignOut}>Sign out</button>
-              </div>
-            ) : (
-  <>
-  </>
-)}
           </section>
 
+          <button type="button" className="admin-link" onClick={onOpenAdmin}><span aria-hidden="true">⚙</span> Manage content</button>
+          <button type="button" className="language-button" onClick={onLanguageToggle}><span aria-hidden="true">文</span>{language === 'ar' ? 'English view' : 'العربية'}</button>
           <button type="button" className="theme-button" onClick={onThemeToggle}>
             <span aria-hidden="true">{theme === 'dark' ? '☀' : '◐'}</span>
             {theme === 'dark' ? 'Use light view' : 'Use dark view'}

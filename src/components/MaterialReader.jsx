@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { localizeField } from '../lib/contentModel';
 
 function LegacyBUCReader() {
   const [state, setState] = useState({ loading: true, sections: [], error: false });
@@ -42,30 +43,31 @@ function LegacyBUCReader() {
   );
 }
 
-function StructuredReader({ subject }) {
+function StructuredReader({ subject, language = 'en' }) {
   return (
     <div className="structured-material">
-      {subject.materials.map((material, index) => (
+      {(subject.materials || []).map((material, index) => (
         <details key={material.id} className="material-accordion" open={index === 0}>
-          <summary><span>{material.title}</span><span aria-hidden="true">⌄</span></summary>
+          <summary><span>{localizeField(material.title, material.titleAr, language)}</span><span aria-hidden="true">⌄</span></summary>
           <div className="structured-material__content">
-            <p>{material.summary}</p>
+            <p>{localizeField(material.summary, material.summaryAr, language)}</p>
             <dl>
-              {material.points.map(([term, explanation]) => <div key={term}><dt>{term}</dt><dd>{explanation}</dd></div>)}
+              {(language === 'ar' && material.pointsAr?.length ? material.pointsAr : material.points || []).map(([term, explanation]) => <div key={term}><dt>{term}</dt><dd>{explanation}</dd></div>)}
             </dl>
-            <aside><strong>Short example</strong><p>{material.example}</p></aside>
+            <aside><strong>{language === 'ar' ? 'مثال قصير' : 'Short example'}</strong><p>{localizeField(material.example, material.exampleAr, language)}</p></aside>
           </div>
         </details>
       ))}
+      {!subject.materials?.length && <div className="empty-state"><strong>No structured notes yet.</strong><p>Use the content builder to add the first lesson.</p></div>}
     </div>
   );
 }
 
-export function MaterialReader({ subject }) {
+export function MaterialReader({ subject, language = 'en' }) {
   return (
     <section className="material-card" aria-labelledby={`${subject.id}-material-title`}>
       <div className="material-card__header"><div><span className="eyebrow">Course material</span><h2 id={`${subject.id}-material-title`}>Read, review, return</h2></div><span className="material-card__badge">{subject.materialType === 'legacy' ? 'Complete summary' : 'Starter notes'}</span></div>
-      {subject.materialType === 'legacy' ? <LegacyBUCReader /> : <StructuredReader subject={subject} />}
+      {subject.materialType === 'legacy' ? <LegacyBUCReader /> : <StructuredReader subject={subject} language={language} />}
     </section>
   );
 }

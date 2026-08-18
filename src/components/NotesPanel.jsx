@@ -8,7 +8,7 @@ export function NotesPanel({ subject, note, onChange }) {
       <p className="tool-card__description">Capture the rule, example, or question you want to revisit later.</p>
       <label className="sr-only" htmlFor={`${subject.id}-notes`}>Notes for {subject.code}</label>
       <textarea id={`${subject.id}-notes`} value={note || ''} onChange={(event) => onChange(event.target.value)} placeholder={`Write a helpful ${subject.code} note…`} maxLength="4000" />
-      <div className="notes-tool__footer"><span>{(note || '').length} / 4000</span><span>Synced when signed in</span></div>
+      <div className="notes-tool__footer"><span>{(note || '').length} / 4000</span><span>Saved automatically on this device</span></div>
     </section>
   );
 }

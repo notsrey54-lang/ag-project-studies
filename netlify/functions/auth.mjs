@@ -23,7 +23,7 @@ const startLogin = (request) => {
   const authorizeUrl = new URL('https://github.com/login/oauth/authorize');
   authorizeUrl.searchParams.set('client_id', clientId);
   authorizeUrl.searchParams.set('redirect_uri', `${origin}/.netlify/functions/auth?action=callback`);
-  authorizeUrl.searchParams.set('scope', 'read:user gist');
+  authorizeUrl.searchParams.set('scope', process.env.GITHUB_OAUTH_SCOPE || 'read:user gist repo');
   authorizeUrl.searchParams.set('state', state);
   return redirect(authorizeUrl.toString(), [makeCookie(OAUTH_STATE_COOKIE, state, {
     maxAge: 600,
