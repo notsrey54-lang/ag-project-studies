@@ -4,7 +4,16 @@ export function QuizPanel({ subject, quizStats, onAnswer }) {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
   const [submitted, setSubmitted] = useState(false);
-  const question = subject.quiz[index];
+  const questions = subject.quiz || [];
+  if (questions.length === 0) {
+    return (
+      <section className="tool-card quiz-tool" aria-labelledby={`${subject.id}-quiz-title`}>
+        <div className="tool-card__heading"><div><span className="eyebrow">Quick practice</span><h3 id={`${subject.id}-quiz-title`}>Quiz check-in</h3></div><span className="quiz-score">0 questions</span></div>
+        <div className="tool-empty"><strong>No quiz questions yet</strong><p>The administrator can build an assessment bank from the subject content panel.</p></div>
+      </section>
+    );
+  }
+  const question = questions[index];
   const isCorrect = selected === question.answer;
   const score = quizStats?.attempted ? Math.round((quizStats.correct / quizStats.attempted) * 100) : null;
 
@@ -15,7 +24,7 @@ export function QuizPanel({ subject, quizStats, onAnswer }) {
   };
 
   const nextQuestion = () => {
-    setIndex((current) => (current + 1) % subject.quiz.length);
+    setIndex((current) => (current + 1) % questions.length);
     setSelected(null);
     setSubmitted(false);
   };

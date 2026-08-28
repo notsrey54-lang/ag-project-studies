@@ -190,3 +190,4 @@ export const SUBJECTS = [
 ];
 
 export const getSubject = (subjectId) => SUBJECTS.find((subject) => subject.id === subjectId);
+

@@ -3,7 +3,15 @@ import { useState } from 'react';
 export function FlashcardDeck({ subject, reviewedCards, onReview }) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const cards = subject.flashcards;
+  const cards = subject.flashcards || [];
+  if (cards.length === 0) {
+    return (
+      <section className="tool-card flashcard-tool" aria-labelledby={`${subject.id}-flashcards-title`}>
+        <div className="tool-card__heading"><div><span className="eyebrow">Memory check</span><h3 id={`${subject.id}-flashcards-title`}>Flashcards</h3></div><span className="tool-card__counter">0 cards</span></div>
+        <div className="tool-empty"><strong>No flashcards yet</strong><p>The administrator can add flashcards from the subject content panel.</p></div>
+      </section>
+    );
+  }
   const card = cards[index];
   const reviewed = Boolean(reviewedCards?.[card.id]);
 

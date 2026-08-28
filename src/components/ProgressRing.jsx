@@ -1,12 +1,13 @@
 export function ProgressRing({ percent, label = 'complete', compact = false }) {
+  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
   const size = compact ? 52 : 72;
   const stroke = compact ? 5 : 6;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
+  const offset = circumference - (safePercent / 100) * circumference;
 
   return (
-    <div className={`progress-ring ${compact ? 'progress-ring--compact' : ''}`} aria-label={`${percent}% ${label}`}>
+    <div className={`progress-ring ${compact ? 'progress-ring--compact' : ''}`} aria-label={`${safePercent}% ${label}`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-hidden="true">
         <circle className="progress-ring__track" cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke} />
         <circle
@@ -19,7 +20,7 @@ export function ProgressRing({ percent, label = 'complete', compact = false }) {
           strokeDashoffset={offset}
         />
       </svg>
-      <span>{percent}%</span>
+      <span>{safePercent}%</span>
     </div>
   );
 }

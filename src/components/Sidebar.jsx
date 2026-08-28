@@ -1,4 +1,3 @@
-import { SUBJECTS } from '../data/courses';
 import { getSubjectProgress } from '../lib/studyProfile';
 import { ProgressRing } from './ProgressRing';
 
@@ -23,7 +22,7 @@ function SubjectButton({ subject, selectedSubject, profile, onSelect }) {
   );
 }
 
-export function Sidebar({ selectedSubject, profile, onSelect, onHome, mobileOpen, onClose, theme, onThemeToggle, session, onSignIn, onSignOut, onSync }) {
+export function Sidebar({ subjects, selectedSubject, profile, onSelect, onHome, activeView, onOpenGpa, onOpenAdministrator, mobileOpen, onClose, theme, onThemeToggle }) {
   return (
     <>
       <button className={`sidebar-backdrop ${mobileOpen ? 'sidebar-backdrop--visible' : ''}`} aria-label="Close subject menu" onClick={onClose} />
@@ -42,31 +41,28 @@ export function Sidebar({ selectedSubject, profile, onSelect, onHome, mobileOpen
         </div>
 
         <nav className="subject-list" aria-label="Subjects">
-          {SUBJECTS.map((subject) => (
+          {subjects.map((subject) => (
             <SubjectButton key={subject.id} subject={subject} selectedSubject={selectedSubject} profile={profile} onSelect={onSelect} />
           ))}
         </nav>
 
+        <div className="sidebar__tools">
+          <span className="eyebrow">Study tools</span>
+          <button type="button" className={`sidebar-tool-button ${activeView === 'gpa' ? 'sidebar-tool-button--active' : ''}`} onClick={onOpenGpa}><span aria-hidden="true">Σ</span><span><strong>GPA Calculator</strong><small>Terms, targets, projections</small></span></button>
+        </div>
+
         <div className="sidebar__lower">
           <section className="sync-card" aria-live="polite">
             <div className="sync-card__top">
-              <span className="sync-card__icon" aria-hidden="true">{session.status === 'signed-in' || session.status === 'syncing' ? '☁' : '⌂'}</span>
+              <span className="sync-card__icon" aria-hidden="true">⌂</span>
               <div>
-                <strong>{session.status === 'signed-in' || session.status === 'syncing' ? 'Study sync' : 'This device'}</strong>
-                <p>{session.message}</p>
+                <strong>This device</strong>
+                <p>Your progress is saved on this device.</p>
               </div>
             </div>
-            {session.status === 'signed-in' || session.status === 'syncing' ? (
-              <div className="sync-card__actions">
-                <button type="button" className="text-button" onClick={onSync}>Sync now</button>
-                <button type="button" className="text-button" onClick={onSignOut}>Sign out</button>
-              </div>
-            ) : (
-              <>
-                <p className="sync-card__privacy">Sync uses a secret GitHub Gist. Avoid putting sensitive information in notes.</p>
-              </>
-            )}
           </section>
+
+          <button type="button" className={`administrator-button ${activeView === 'admin' ? 'administrator-button--active' : ''}`} onClick={onOpenAdministrator}><span aria-hidden="true">⌘</span><span><strong>Administrator</strong><small>Manage university content</small></span></button>
 
           <button type="button" className="theme-button" onClick={onThemeToggle}>
             <span aria-hidden="true">{theme === 'dark' ? '☀' : '◐'}</span>

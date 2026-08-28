@@ -102,14 +102,42 @@ export const recordQuizAttempt = (profile, subjectId, wasCorrect) => {
 };
 
 export const getSubjectProgress = (profile, subject) => {
-  const total = subject.modules.length;
-  const completed = subject.modules.filter((module) => profile.progress[subject.id]?.[module.id]).length;
+  return getSectionProgress(profile, subject, 'all');
+};
+
+export const getSectionProgress = (profile, subject, section = 'all') => {
+  const modules = (subject?.modules || []).filter((module) => section === 'all' || (module.section || 'course') === section);
+  const total = modules.length;
+  const completed = modules.filter((module) => profile?.progress?.[subject?.id]?.[module.id]).length;
   return {
     completed,
     total,
-    percent: total ? Math.round((completed / total) * 100) : 0,
+    percent: total ? Math.min(100, Math.round((completed / total) * 100)) : 0,
   };
 };
+
+export const markSubjectComplete = (profile, subject, complete = true) => stamp({
+  ...profile,
+  progress: {
+    ...profile.progress,
+    [subject.id]: complete
+      ? Object.fromEntries((subject.modules || []).map((module) => [module.id, true]))
+      : {},
+  },
+});
+
+export const markAllSubjectsComplete = (profile, subjects) => stamp({
+  ...profile,
+  progress: (subjects || []).reduce((progress, subject) => ({
+    ...progress,
+    [subject.id]: Object.fromEntries((subject.modules || []).map((module) => [module.id, true])),
+  }), { ...profile.progress }),
+});
+
+export const resetProgress = (profile) => stamp({
+  ...profile,
+  progress: {},
+});
 
 export const getBookmarkCount = (profile, subjectId) => Object.values(profile.bookmarks[subjectId] || {}).filter(Boolean).length;
 
@@ -137,19 +165,3 @@ export const mergeProfiles = (localProfile, remoteProfile) => {
     quizAttempts: { ...older.quizAttempts, ...newer.quizAttempts },
   });
 };
-
-const request = async (url, options = {}) => {
-  const response = await fetch(url, { credentials: 'include', ...options });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'We could not complete that request.');
-  return payload;
-};
-
-export const getSession = () => request('/.netlify/functions/auth?action=session');
-export const getRemoteProfile = () => request('/.netlify/functions/study-data');
-export const putRemoteProfile = (profile) => request('/.netlify/functions/study-data', {
-  method: 'PUT',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ profile }),
-});
-export const signOutRemote = () => request('/.netlify/functions/auth?action=logout', { method: 'POST' });

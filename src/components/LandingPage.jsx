@@ -1,10 +1,9 @@
-import { SUBJECTS } from '../data/courses';
 import { getSubjectProgress } from '../lib/studyProfile';
 import { ProgressRing } from './ProgressRing';
 
-export function LandingPage({ profile, onChooseSubject, onOpenMenu }) {
-  const completed = SUBJECTS.reduce((total, subject) => total + getSubjectProgress(profile, subject).completed, 0);
-  const total = SUBJECTS.reduce((sum, subject) => sum + subject.modules.length, 0);
+export function LandingPage({ subjects, profile, onChooseSubject, onOpenMenu }) {
+  const completed = subjects.reduce((total, subject) => total + getSubjectProgress(profile, subject).completed, 0);
+  const total = subjects.reduce((sum, subject) => sum + subject.modules.length, 0);
   const percent = total ? Math.round((completed / total) * 100) : 0;
 
   return (
@@ -66,7 +65,7 @@ export function LandingPage({ profile, onChooseSubject, onOpenMenu }) {
           <p>Each space includes materials, quick practice, notes, and a clear progress view.</p>
         </div>
         <div className="subject-showcase__grid">
-          {SUBJECTS.map((subject) => {
+          {subjects.map((subject) => {
             const progress = getSubjectProgress(profile, subject);
             return (
               <button key={subject.id} type="button" className={`showcase-card showcase-card--${subject.color}`} onClick={() => onChooseSubject(subject.id)}>
