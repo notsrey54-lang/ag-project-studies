@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ContentBlockReader } from './ContentBlockReader';
 
 function LegacyBUCReader() {
   const [state, setState] = useState({ loading: true, sections: [], error: false });
@@ -45,6 +46,7 @@ function LegacyBUCReader() {
 function StructuredReader({ subject }) {
   return (
     <div className="structured-material">
+      <ContentBlockReader subject={subject} />
       {(subject.materials || []).map((material, index) => (
         <details key={material.id} className="material-accordion" open={index === 0}>
           <summary><span>{material.title}</span><span aria-hidden="true">⌄</span></summary>

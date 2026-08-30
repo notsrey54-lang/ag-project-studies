@@ -32,12 +32,14 @@ import {
   markSubjectComplete,
   resetProgress,
 } from '../lib/studyProfile';
+import { ContentStudio } from './ContentStudio';
 
 const TABS = [
   { id: 'overview', label: 'Dashboard', icon: '⌂' },
   { id: 'subject', label: 'Subject setup', icon: '◈' },
   { id: 'chapters', label: 'Chapters', icon: '☷' },
   { id: 'notes', label: 'Notes & resources', icon: '▤' },
+  { id: 'studio', label: 'Content studio', icon: '✦' },
   { id: 'cards', label: 'Flashcards', icon: '◇' },
   { id: 'quizzes', label: 'Quizzes', icon: '?' },
   { id: 'library', label: 'Glossary & formulas', icon: 'Σ' },
@@ -148,7 +150,7 @@ function AdminHeader({ selectedSubject, activeTab, dirty, message, publishState,
         <button type="button" className="secondary-button" onClick={onSaveDraft}>Save draft</button>
         <button type="button" className="secondary-button" onClick={onExport}>Export JSON</button>
         <label className="admin-import-button secondary-button">Import JSON<input type="file" accept="application/json,.json" onChange={onImport} /></label>
-        <button type="button" className="primary-button" onClick={onPublish} disabled={publishState === 'publishing'}>{publishState === 'publishing' ? 'Publishing…' : 'Publish to GitHub'}</button>
+        <button type="button" className="primary-button" onClick={onPublish} disabled={publishState === 'publishing'}>{publishState === 'publishing' ? 'Publishing…' : 'Publish to Supabase'}</button>
         <button type="button" className="icon-button" onClick={onLogout} aria-label="Lock administrator">×</button>
       </div>
     </header>
@@ -178,22 +180,25 @@ function DashboardTab({ subjects, selectedSubject, profile, onSelectTab, onLoadD
   const totals = useMemo(() => subjects.reduce((result, subject) => ({
     chapters: result.chapters + subject.modules.length,
     notes: result.notes + subject.materials.length,
+    blocks: result.blocks + subject.contentBlocks.length,
+    tools: result.tools + subject.tools.length,
     cards: result.cards + subject.flashcards.length,
     questions: result.questions + subject.quiz.length,
-  }), { chapters: 0, notes: 0, cards: 0, questions: 0 }), [subjects]);
+  }), { chapters: 0, notes: 0, blocks: 0, tools: 0, cards: 0, questions: 0 }), [subjects]);
 
   return (
     <div className="admin-tab admin-dashboard">
-      <div className="admin-tab-intro"><span className="eyebrow">Reusable university CMS</span><h2>Build once. Publish everywhere.</h2><p>Set up each subject, organise chapters, paste complete notes, and attach practice material. Students will see the published version on any phone or laptop after Netlify finishes the deployment.</p></div>
+      <div className="admin-tab-intro"><span className="eyebrow">Reusable university CMS</span><h2>Build once. Publish everywhere.</h2><p>Set up each subject, organise chapters, build rich notes, and attach practice material. Supabase stores the approved shared content for every phone and laptop without publishing student progress.</p></div>
       <div className="admin-stat-grid">
         <article><span>Subjects</span><strong>{subjects.length}</strong><small>including archived</small></article>
         <article><span>Chapters</span><strong>{totals.chapters}</strong><small>ordered study sections</small></article>
-        <article><span>Notes</span><strong>{totals.notes}</strong><small>long-form materials</small></article>
+        <article><span>Notes</span><strong>{totals.notes + totals.blocks}</strong><small>{totals.notes} notes · {totals.blocks} rich blocks</small></article>
         <article><span>Practice items</span><strong>{totals.cards + totals.questions}</strong><small>{totals.cards} cards · {totals.questions} questions</small></article>
       </div>
       <div className="admin-quick-grid">
         <button type="button" className="admin-quick-card" onClick={() => onSelectTab('subject')}><span>◈</span><strong>Subject setup</strong><small>Identity, description, colour, archive state</small></button>
         <button type="button" className="admin-quick-card" onClick={() => onSelectTab('notes')}><span>▤</span><strong>Paste lecture notes</strong><small>Summary, body, key points, examples, resources</small></button>
+        <button type="button" className="admin-quick-card" onClick={() => onSelectTab('studio')}><span>✦</span><strong>Open Content Studio</strong><small>Tables, formulas, drawings, bilingual blocks, and tools</small></button>
         <button type="button" className="admin-quick-card" onClick={() => onSelectTab('cards')}><span>◇</span><strong>Build active recall</strong><small>Flashcards students can review and rate</small></button>
         <button type="button" className="admin-quick-card" onClick={() => onSelectTab('quizzes')}><span>?</span><strong>Create assessments</strong><small>MCQs with explanations and answer keys</small></button>
       </div>
@@ -212,10 +217,10 @@ function DashboardTab({ subjects, selectedSubject, profile, onSelectTab, onLoadD
         <section className="admin-draft-alert"><div><strong>A local draft is available.</strong><p>It has not been published. Load it only if it is the version you want to continue editing.</p></div><div><button type="button" className="secondary-button" onClick={onLoadDraft}>Load draft</button><button type="button" className="text-button" onClick={onClearDraft}>Discard draft</button></div></section>
       ) : null}
       <section className="admin-security-card">
-        <div><span className="eyebrow">Administrator access</span><h3>Password controls</h3><p>The password is not displayed in this panel. Change it for this browser or reset it to the original administrator password if needed.</p></div>
+        <div><span className="eyebrow">Administrator access</span><h3>Password controls</h3><p>The password is not displayed in this panel. Changes are saved through the protected Supabase function, and reset requires the current password.</p></div>
         <div className="admin-security-card__actions"><button type="button" className="secondary-button" onClick={onChangePassword}>Change password</button><button type="button" className="text-button danger-button" onClick={onResetPassword}>Reset password</button></div>
       </section>
-      <section className="admin-model-card"><span className="eyebrow">Available content types</span><div className="admin-model-list"><span>Subjects</span><span>Chapters</span><span>Notes</span><span>Resources</span><span>Flashcards</span><span>MCQs</span><span>Glossary</span><span>Formulas</span><span>Archive</span><span>JSON backup</span></div></section>
+      <section className="admin-model-card"><span className="eyebrow">Available content types</span><div className="admin-model-list"><span>Subjects</span><span>Chapters</span><span>Rich blocks</span><span>Tables</span><span>Drawings</span><span>Resources</span><span>Flashcards</span><span>Assessments</span><span>Glossary</span><span>Formulas</span><span>Subject tools</span><span>Custom types</span><span>Archive</span><span>JSON backup</span></div></section>
       {!selectedSubject ? <p className="admin-hint">Create or choose a subject from the library rail to start editing.</p> : null}
     </div>
   );
@@ -332,14 +337,25 @@ function CardsTab({ subject, updateSubject }) {
 }
 
 function QuizzesTab({ subject, updateSubject }) {
+  const questionTypes = [['mcq', 'Multiple choice'], ['true_false', 'True / false'], ['short_answer', 'Short answer'], ['paragraph', 'Paragraph response'], ['bullet_point', 'Bullet-point response'], ['matching', 'Matching'], ['ordering', 'Ordering'], ['formula', 'Formula response']];
+  const responseFormats = [['single_choice', 'Single choice'], ['multiple_choice', 'Multiple choice'], ['short_text', 'Short text'], ['paragraph', 'Paragraph'], ['bullet', 'Bullet points'], ['number', 'Number'], ['formula', 'Formula'], ['matching', 'Matching'], ['ordering', 'Ordering']];
   if (!subject) return <EmptyEditor title="Create a subject first" description="Quiz questions need a subject to belong to." buttonLabel="Use the + button" onAdd={() => {}} />;
-  return (
-    <div className="admin-tab">
-      <div className="admin-tab-heading"><div><span className="eyebrow">Assessment bank</span><h2>Multiple-choice quizzes</h2><p>Every question includes four options, one correct answer, and an explanation shown after the student answers.</p></div><button type="button" className="primary-button" onClick={() => updateSubject({ quiz: [...subject.quiz, createBlankQuizQuestion()] })}>+ Add question</button></div>
-      <div className="admin-question-editor">{subject.quiz.map((question, index) => <article className="admin-question-card" key={question.id}><div className="admin-question-card__top"><span>Question {index + 1}</span><button type="button" className="delete-button" onClick={() => updateSubject({ quiz: subject.quiz.filter((item) => item.id !== question.id) })}>Delete</button></div><TextField label="Question prompt" value={question.prompt} onChange={(value) => updateSubject({ quiz: updateAt(subject.quiz, question.id, { prompt: value }) })} placeholder="Which statement is correct?" rows={3} /><div className="admin-options-grid">{question.options.map((option, optionIndex) => <label className={`admin-option-field ${question.answer === optionIndex ? 'admin-option-field--correct' : ''}`} key={`${question.id}-${optionIndex}`}><span><input type="radio" name={`correct-${question.id}`} checked={question.answer === optionIndex} onChange={() => updateSubject({ quiz: updateAt(subject.quiz, question.id, { answer: optionIndex }) })} /> Option {String.fromCharCode(65 + optionIndex)} {question.answer === optionIndex ? '· correct' : ''}</span><input value={option} placeholder={`Answer option ${String.fromCharCode(65 + optionIndex)}`} onChange={(event) => updateSubject({ quiz: updateAt(subject.quiz, question.id, { options: question.options.map((item, itemIndex) => itemIndex === optionIndex ? event.target.value : item) }) })} /></label>)}</div><TextField label="Explanation" value={question.explanation} onChange={(value) => updateSubject({ quiz: updateAt(subject.quiz, question.id, { explanation: value }) })} placeholder="Explain why the correct option is right." rows={3} /></article>)}</div>
-      {subject.quiz.length === 0 ? <EmptyEditor title="No quiz questions yet" description="Build an assessment bank that can be reused for quick quizzes and future exam mode." buttonLabel="Add first question" onAdd={() => updateSubject({ quiz: [createBlankQuizQuestion()] })} /> : null}
-    </div>
-  );
+  const addQuestion = () => updateSubject({ quiz: [...subject.quiz, createBlankQuizQuestion()] });
+  const updateQuestion = (id, patch) => updateSubject({ quiz: updateAt(subject.quiz, id, patch) });
+  return <div className="admin-tab">
+    <div className="admin-tab-heading"><div><span className="eyebrow">Assessment authoring</span><h2>Questions and marking</h2><p>Create MCQs, true/false, paragraph, bullet-point, matching, ordering, and formula questions. Add points, model answers, Arabic explanations, hints, tags, and a rubric for every item.</p></div><button type="button" className="primary-button" onClick={addQuestion}>+ Add question</button></div>
+    <div className="admin-question-editor">{subject.quiz.map((question, index) => <article className="admin-question-card admin-question-card--advanced" key={question.id}>
+      <div className="admin-question-card__top"><span>Question {index + 1} · {questionTypes.find(([id]) => id === question.questionType)?.[1] || 'Assessment'}</span><button type="button" className="delete-button" onClick={() => updateSubject({ quiz: subject.quiz.filter((item) => item.id !== question.id) })}>Delete</button></div>
+      <div className="admin-form-grid admin-form-grid--compact"><label className="admin-field"><span>Question type</span><select value={question.questionType} onChange={(event) => updateQuestion(question.id, { questionType: event.target.value, responseFormat: event.target.value === 'mcq' ? 'single_choice' : 'paragraph' })}>{questionTypes.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><label className="admin-field"><span>Response format</span><select value={question.responseFormat} onChange={(event) => updateQuestion(question.id, { responseFormat: event.target.value })}>{responseFormats.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><Field label="Points" type="number" min="0" step="0.25" value={question.points} onChange={(value) => updateQuestion(question.id, { points: Number(value) || 0 })} /><Field label="Negative points" type="number" min="0" step="0.25" value={question.negativePoints} onChange={(value) => updateQuestion(question.id, { negativePoints: Number(value) || 0 })} /><label className="admin-field"><span>Difficulty</span><select value={question.difficulty} onChange={(event) => updateQuestion(question.id, { difficulty: event.target.value })}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="exam">Exam</option></select></label><label className="admin-field"><span>Chapter</span><select value={question.chapterId || ''} onChange={(event) => updateQuestion(question.id, { chapterId: event.target.value })}><option value="">Subject-wide</option>{subject.modules.map((module) => <option value={module.id} key={module.id}>{module.title}</option>)}</select></label></div>
+      <div className="admin-language-grid"><TextField label="Prompt · English" value={question.prompt} onChange={(value) => updateQuestion(question.id, { prompt: value })} placeholder="Write the question exactly as students should see it." rows={4} /><TextField label="Prompt · Arabic" value={question.promptAr} onChange={(value) => updateQuestion(question.id, { promptAr: value })} placeholder="اكتب السؤال باللغة العربية" rows={4} /></div>
+      {question.questionType === 'mcq' ? <div className="admin-options-grid">{question.options.map((option, optionIndex) => <label className={`admin-option-field ${question.answer === optionIndex ? 'admin-option-field--correct' : ''}`} key={`${question.id}-${optionIndex}`}><span><input type="radio" name={`correct-${question.id}`} checked={question.answer === optionIndex} onChange={() => updateQuestion(question.id, { answer: optionIndex, correctAnswer: option })} /> Option {String.fromCharCode(65 + optionIndex)} {question.answer === optionIndex ? '· correct' : ''}</span><input value={option} placeholder={`Answer option ${String.fromCharCode(65 + optionIndex)}`} onChange={(event) => updateQuestion(question.id, { options: question.options.map((item, itemIndex) => itemIndex === optionIndex ? event.target.value : item), ...(question.answer === optionIndex ? { correctAnswer: event.target.value } : {}) })} /></label>)}</div> : <div className="admin-form-grid admin-form-grid--compact"><Field label="Correct answer / key" value={question.correctAnswer} onChange={(value) => updateQuestion(question.id, { correctAnswer: value })} placeholder={question.questionType === 'true_false' ? 'True or False' : 'Expected answer or marking key'} /><Field label="Tags" value={question.tags.join(', ')} onChange={(value) => updateQuestion(question.id, { tags: value.split(',').map((tag) => tag.trim()).filter(Boolean) })} placeholder="definition, exam, chapter-1" /></div>}
+      <div className="admin-language-grid"><TextField label="Model answer · English" value={question.modelAnswer} onChange={(value) => updateQuestion(question.id, { modelAnswer: value })} placeholder="The ideal paragraph, bullet-point response, or working." rows={5} /><TextField label="Model answer · Arabic" value={question.modelAnswerAr} onChange={(value) => updateQuestion(question.id, { modelAnswerAr: value })} placeholder="الإجابة النموذجية" rows={5} /></div>
+      <div className="admin-language-grid"><TextField label="Explanation · English" value={question.explanation} onChange={(value) => updateQuestion(question.id, { explanation: value })} placeholder="Explain the answer and the reasoning." rows={4} /><TextField label="Explanation · Arabic" value={question.explanationAr} onChange={(value) => updateQuestion(question.id, { explanationAr: value })} placeholder="شرح مختصر باللغة العربية" rows={4} /></div>
+      <div className="admin-language-grid"><TextField label="Hint · English" value={question.hint} onChange={(value) => updateQuestion(question.id, { hint: value })} placeholder="Optional hint shown before submission." rows={3} /><TextField label="Hint · Arabic" value={question.hintAr} onChange={(value) => updateQuestion(question.id, { hintAr: value })} placeholder="تلميح اختياري" rows={3} /></div>
+      <TextField label="Rubric JSON" value={JSON.stringify(question.rubric || [], null, 2)} onChange={(value) => { try { updateQuestion(question.id, { rubric: JSON.parse(value) }); } catch { /* keep invalid JSON visible while editing */ } }} placeholder='[{"criterion":"Definition","points":2}]' rows={5} help="Optional marking criteria. Keep it as a JSON array of criterion and points objects." />
+    </article>)}</div>
+    {subject.quiz.length === 0 ? <EmptyEditor title="No assessment questions yet" description="Build a reusable assessment bank for quick quizzes, mistake review, and future exam mode." buttonLabel="Add first question" onAdd={addQuestion} /> : null}
+  </div>;
 }
 
 function LibraryTab({ subject, updateSubject }) {
@@ -372,7 +388,7 @@ function PasswordDialog({ onClose, onChanged }) {
       setError(changeError.message || 'The password could not be changed.');
     }
   };
-  return <div className="admin-modal-backdrop"><form className="admin-modal" onSubmit={submit}><button type="button" className="icon-button admin-modal__close" onClick={onClose} aria-label="Close">×</button><span className="eyebrow">Security</span><h2>Change administrator password</h2><p>The new password stays in this browser until you change it again or reset it.</p><Field label="Current password" value={current} onChange={setCurrent} type="password" /><Field label="New password" value={next} onChange={setNext} type="password" help="Use at least 4 characters." /><Field label="Confirm new password" value={confirm} onChange={setConfirm} type="password" />{error ? <p className="admin-error">{error}</p> : null}{success ? <p className="admin-success">{success}</p> : null}<div className="admin-modal__actions"><button type="button" className="secondary-button" onClick={onClose}>Close</button><button type="submit" className="primary-button">Save password</button></div></form></div>;
+  return <div className="admin-modal-backdrop"><form className="admin-modal" onSubmit={submit}><button type="button" className="icon-button admin-modal__close" onClick={onClose} aria-label="Close">×</button><span className="eyebrow">Security</span><h2>Change administrator password</h2><p>The new password is stored by the protected Supabase administrator service and applies to the site.</p><Field label="Current password" value={current} onChange={setCurrent} type="password" /><Field label="New password" value={next} onChange={setNext} type="password" help="Use at least 4 characters." /><Field label="Confirm new password" value={confirm} onChange={setConfirm} type="password" />{error ? <p className="admin-error">{error}</p> : null}{success ? <p className="admin-success">{success}</p> : null}<div className="admin-modal__actions"><button type="button" className="secondary-button" onClick={onClose}>Close</button><button type="submit" className="primary-button">Save password</button></div></form></div>;
 }
 
 export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPublished, onClose }) {
@@ -503,12 +519,12 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
       onPublished(publicSubjects);
       setDirty(false);
       setHasDraft(false);
-      setMessage('Published to GitHub. Netlify will deploy the update automatically.');
+      setMessage('Published to Supabase. Students will receive the shared content on their next refresh.');
       setPublishState('success');
       window.setTimeout(() => setPublishState('idle'), 4000);
     } catch (error) {
       setPublishState('error');
-      setPublishError(error.message || 'GitHub could not publish this content.');
+      setPublishError(error.message || 'Supabase could not publish this content.');
     }
   };
 
@@ -518,11 +534,15 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
     setSessionPassword('');
   };
 
-  const resetPassword = () => {
+  const resetPassword = async () => {
     if (!window.confirm('Reset the administrator password to the original password?')) return;
-    resetAdminPassword();
-    setUnlocked(false);
-    setSessionPassword('');
+    try {
+      await resetAdminPassword(sessionPassword);
+      setUnlocked(false);
+      setSessionPassword('');
+    } catch (error) {
+      setPublishError(error.message || 'The administrator password could not be reset.');
+    }
   };
 
   const completeSubjectOnDevice = (subject) => {
@@ -556,11 +576,12 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
         <div className="admin-main">
           <nav className="admin-tabs" aria-label="Administrator tools">{TABS.map((tab) => <button type="button" key={tab.id} className={activeTab === tab.id ? 'admin-tab-button--active' : ''} onClick={() => setActiveTab(tab.id)}><span>{tab.icon}</span>{tab.label}</button>)}</nav>
           {publishError ? <div className="admin-error admin-error--banner" role="alert">{publishError}</div> : null}
-          {publishState === 'success' ? <div className="admin-success admin-success--banner">Published successfully. Wait for the Netlify deployment to finish before checking from another device.</div> : null}
+          {publishState === 'success' ? <div className="admin-success admin-success--banner">Published successfully to Supabase. Refreshing the site on another device will load the shared subject content.</div> : null}
           {activeTab === 'overview' ? <DashboardTab subjects={editorSubjects} selectedSubject={selectedSubject} profile={profile} onSelectTab={setActiveTab} onLoadDraft={loadDraft} hasDraft={hasDraft} onClearDraft={discardDraft} onChangePassword={() => setPasswordDialog(true)} onResetPassword={resetPassword} onCompleteSubject={completeSubjectOnDevice} onCompleteAllSubjects={completeAllSubjectsOnDevice} onResetProgress={resetLocalProgress} /> : null}
           {activeTab === 'subject' ? <SubjectTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'chapters' ? <ChaptersTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'notes' ? <NotesTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
+          {activeTab === 'studio' ? <ContentStudio subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'cards' ? <CardsTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'quizzes' ? <QuizzesTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'library' ? <LibraryTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}

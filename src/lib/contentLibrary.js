@@ -1,3 +1,5 @@
+import { getSupabaseConfig, supabaseHeaders } from './supabaseClient.js';
+
 const CONTENT_STORAGE_KEY = 'ag-study-content-draft-v1';
 
 export const CONTENT_VERSION = 1;
@@ -9,10 +11,16 @@ export const CHAPTER_SECTIONS = Object.freeze([
 ]);
 
 const chapterSectionIds = new Set(CHAPTER_SECTIONS.map((section) => section.id));
+const blockTypes = new Set(['paragraph', 'heading', 'bullet_list', 'numbered_list', 'checklist', 'callout', 'quote', 'table', 'formula', 'comparison', 'timeline', 'link', 'image', 'video', 'audio', 'code', 'drawing', 'custom']);
+const toolTypes = new Set(['calculator', 'formula_practice', 'graph', 'matching', 'timeline', 'custom']);
 
 export const getChapterSectionLabel = (section) => CHAPTER_SECTIONS.find((candidate) => candidate.id === section)?.label || 'Course content';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const text = (value, fallback = '') => typeof value === 'string' ? value : fallback;
+const list = (value) => Array.isArray(value) ? value : [];
+const object = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+const finiteNumber = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
 export const createContentId = (prefix = 'item') => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -22,7 +30,9 @@ export const createBlankSubject = () => ({
   name: 'New subject',
   shortName: 'New subject',
   description: 'Add a clear description for this subject.',
+  descriptionAr: '',
   eyebrow: 'Your study space',
+  eyebrowAr: '',
   color: 'gold',
   materialType: 'structured',
   archived: false,
@@ -33,12 +43,18 @@ export const createBlankSubject = () => ({
   quiz: [],
   glossary: [],
   formulas: [],
+  contentBlocks: [],
+  tools: [],
+  customTypes: [],
+  metadata: {},
 });
 
 export const createBlankModule = () => ({
   id: createContentId('chapter'),
   title: 'Chapter 1',
+  titleAr: '',
   subtitle: 'Add a chapter description',
+  subtitleAr: '',
   duration: '15 min',
   section: 'course',
 });
@@ -46,56 +62,140 @@ export const createBlankModule = () => ({
 export const createBlankMaterial = () => ({
   id: createContentId('note'),
   title: 'New note',
+  titleAr: '',
   summary: '',
+  summaryAr: '',
   body: '',
+  bodyAr: '',
   points: [],
   example: '',
+  exampleAr: '',
+  chapterId: '',
 });
 
 export const createBlankResource = () => ({
   id: createContentId('resource'),
   title: 'New resource',
+  titleAr: '',
   type: 'PDF',
   url: '',
   description: '',
+  descriptionAr: '',
+  chapterId: '',
 });
 
 export const createBlankFlashcard = () => ({
   id: createContentId('flashcard'),
   prompt: '',
+  promptAr: '',
   answer: '',
+  answerAr: '',
   label: 'Review',
+  labelAr: '',
+  chapterId: '',
+  difficulty: 'medium',
+  tags: [],
 });
 
 export const createBlankQuizQuestion = () => ({
   id: createContentId('question'),
+  questionType: 'mcq',
+  responseFormat: 'single_choice',
   prompt: '',
+  promptAr: '',
   options: ['', '', '', ''],
   answer: 0,
+  correctAnswer: '',
+  points: 1,
+  negativePoints: 0,
   explanation: '',
+  explanationAr: '',
+  modelAnswer: '',
+  modelAnswerAr: '',
+  hint: '',
+  hintAr: '',
+  difficulty: 'medium',
+  tags: [],
+  rubric: [],
+  chapterId: '',
+  settings: {},
 });
 
 export const createBlankGlossaryItem = () => ({
   id: createContentId('term'),
   term: '',
+  termAr: '',
   definition: '',
+  definitionAr: '',
 });
 
 export const createBlankFormula = () => ({
   id: createContentId('formula'),
   name: '',
+  nameAr: '',
   expression: '',
   explanation: '',
+  explanationAr: '',
   example: '',
+  exampleAr: '',
 });
 
-const text = (value, fallback = '') => typeof value === 'string' ? value : fallback;
-const list = (value) => Array.isArray(value) ? value : [];
+export const createBlankContentBlock = (type = 'paragraph') => ({
+  id: createContentId('block'),
+  type: blockTypes.has(type) ? type : 'paragraph',
+  title: '',
+  titleAr: '',
+  chapterId: '',
+  section: 'course',
+  order: 0,
+  content: {
+    text: '',
+    textAr: '',
+    items: [],
+    itemsAr: [],
+    columns: ['Column 1', 'Column 2'],
+    rows: [['', '']],
+    formula: '',
+    formulaAr: '',
+    url: '',
+    label: '',
+    labelAr: '',
+    alt: '',
+    source: '',
+    code: '',
+    language: 'text',
+    quote: '',
+    quoteAr: '',
+    citation: '',
+    leftTitle: '',
+    rightTitle: '',
+    leftItems: [],
+    rightItems: [],
+    events: [],
+    imageData: '',
+    config: {},
+  },
+});
+
+export const createBlankTool = () => ({
+  id: createContentId('tool'),
+  type: 'custom',
+  name: 'New tool',
+  nameAr: '',
+  description: '',
+  descriptionAr: '',
+  chapterId: '',
+  order: 0,
+  config: {},
+});
 
 const normalizeModule = (module, index) => ({
+  ...object(module),
   id: text(module?.id, createContentId('chapter')),
   title: text(module?.title, `Chapter ${index + 1}`),
+  titleAr: text(module?.titleAr),
   subtitle: text(module?.subtitle),
+  subtitleAr: text(module?.subtitleAr),
   duration: text(module?.duration, '15 min'),
   section: chapterSectionIds.has(module?.section)
     ? module.section
@@ -105,61 +205,143 @@ const normalizeModule = (module, index) => ({
 });
 
 const normalizeMaterial = (material, index) => ({
+  ...object(material),
   id: text(material?.id, createContentId('note')),
   title: text(material?.title, `Note ${index + 1}`),
+  titleAr: text(material?.titleAr),
   summary: text(material?.summary),
+  summaryAr: text(material?.summaryAr),
   body: text(material?.body),
+  bodyAr: text(material?.bodyAr),
   points: list(material?.points).map((point) => Array.isArray(point)
     ? [text(point[0]), text(point[1])]
     : [text(point?.term), text(point?.explanation)]),
   example: text(material?.example),
+  exampleAr: text(material?.exampleAr),
+  chapterId: text(material?.chapterId),
 });
 
 const normalizeResource = (resource, index) => ({
+  ...object(resource),
   id: text(resource?.id, createContentId('resource')),
   title: text(resource?.title, `Resource ${index + 1}`),
+  titleAr: text(resource?.titleAr),
   type: text(resource?.type, 'Link'),
   url: text(resource?.url),
   description: text(resource?.description),
+  descriptionAr: text(resource?.descriptionAr),
+  chapterId: text(resource?.chapterId),
 });
 
 const normalizeFlashcard = (card, index) => ({
+  ...object(card),
   id: text(card?.id, createContentId('flashcard')),
   prompt: text(card?.prompt, `Flashcard ${index + 1}`),
+  promptAr: text(card?.promptAr),
   answer: text(card?.answer),
+  answerAr: text(card?.answerAr),
   label: text(card?.label, 'Review'),
+  labelAr: text(card?.labelAr),
+  chapterId: text(card?.chapterId),
+  difficulty: ['easy', 'medium', 'hard'].includes(card?.difficulty) ? card.difficulty : 'medium',
+  tags: list(card?.tags).map((tag) => text(tag)).filter(Boolean),
 });
 
-const normalizeQuestion = (question, index) => ({
-  id: text(question?.id, createContentId('question')),
-  prompt: text(question?.prompt, `Question ${index + 1}`),
-  options: [...list(question?.options).map((option) => text(option)), '', '', '', ''].slice(0, 4),
-  answer: Math.max(0, Math.min(3, Number.isInteger(question?.answer) ? question.answer : Number(question?.answer) || 0)),
-  explanation: text(question?.explanation),
-});
+const normalizeQuestion = (question, index) => {
+  const type = ['mcq', 'true_false', 'short_answer', 'paragraph', 'bullet_point', 'matching', 'ordering', 'formula'].includes(question?.questionType)
+    ? question.questionType
+    : 'mcq';
+  const rawOptions = list(question?.options).map((option) => text(option));
+  const options = type === 'mcq'
+    ? [...rawOptions, '', '', '', ''].slice(0, 4)
+    : rawOptions;
+  const answer = Number.isInteger(question?.answer) ? question.answer : Number(question?.answer);
+  return {
+    ...object(question),
+    id: text(question?.id, createContentId('question')),
+    questionType: type,
+    responseFormat: text(question?.responseFormat, type === 'mcq' ? 'single_choice' : 'paragraph'),
+    prompt: text(question?.prompt, `Question ${index + 1}`),
+    promptAr: text(question?.promptAr),
+    options,
+    answer: Number.isInteger(answer) && answer >= 0 ? answer : 0,
+    correctAnswer: text(question?.correctAnswer),
+    points: Math.max(0, finiteNumber(question?.points, 1)),
+    negativePoints: Math.max(0, finiteNumber(question?.negativePoints, 0)),
+    explanation: text(question?.explanation),
+    explanationAr: text(question?.explanationAr),
+    modelAnswer: text(question?.modelAnswer),
+    modelAnswerAr: text(question?.modelAnswerAr),
+    hint: text(question?.hint),
+    hintAr: text(question?.hintAr),
+    difficulty: ['easy', 'medium', 'hard', 'exam'].includes(question?.difficulty) ? question.difficulty : 'medium',
+    tags: list(question?.tags).map((tag) => text(tag)).filter(Boolean),
+    rubric: list(question?.rubric).map((item) => object(item)),
+    chapterId: text(question?.chapterId),
+    settings: object(question?.settings),
+  };
+};
 
 const normalizeGlossary = (item, index) => ({
+  ...object(item),
   id: text(item?.id, createContentId('term')),
   term: text(item?.term, `Term ${index + 1}`),
+  termAr: text(item?.termAr),
   definition: text(item?.definition),
+  definitionAr: text(item?.definitionAr),
 });
 
 const normalizeFormula = (formula, index) => ({
+  ...object(formula),
   id: text(formula?.id, createContentId('formula')),
   name: text(formula?.name, `Formula ${index + 1}`),
+  nameAr: text(formula?.nameAr),
   expression: text(formula?.expression),
   explanation: text(formula?.explanation),
+  explanationAr: text(formula?.explanationAr),
   example: text(formula?.example),
+  exampleAr: text(formula?.exampleAr),
+});
+
+const normalizeBlock = (block, index) => {
+  const rawContent = object(block?.content);
+  const fallback = createBlankContentBlock(block?.type);
+  return {
+    ...object(block),
+    id: text(block?.id, createContentId('block')),
+    type: blockTypes.has(block?.type) ? block.type : 'paragraph',
+    title: text(block?.title),
+    titleAr: text(block?.titleAr),
+    chapterId: text(block?.chapterId),
+    section: chapterSectionIds.has(block?.section) ? block.section : 'course',
+    order: finiteNumber(block?.order, index),
+    content: { ...fallback.content, ...rawContent },
+  };
+};
+
+const normalizeTool = (tool, index) => ({
+  ...object(tool),
+  id: text(tool?.id, createContentId('tool')),
+  type: toolTypes.has(tool?.type) ? tool.type : 'custom',
+  name: text(tool?.name, `Tool ${index + 1}`),
+  nameAr: text(tool?.nameAr),
+  description: text(tool?.description),
+  descriptionAr: text(tool?.descriptionAr),
+  chapterId: text(tool?.chapterId),
+  order: finiteNumber(tool?.order, index),
+  config: object(tool?.config),
 });
 
 export const normalizeSubject = (subject, index = 0) => ({
-  ...subject,
+  ...object(subject),
   id: text(subject?.id, createContentId('subject')),
   code: text(subject?.code, `SUB${index + 1}`),
   name: text(subject?.name, 'Untitled subject'),
   shortName: text(subject?.shortName, text(subject?.name, 'Subject')),
   description: text(subject?.description),
+  descriptionAr: text(subject?.descriptionAr),
   eyebrow: text(subject?.eyebrow, 'Your study space'),
+  eyebrowAr: text(subject?.eyebrowAr),
   color: ['gold', 'green', 'blue', 'purple'].includes(subject?.color) ? subject.color : 'gold',
   materialType: subject?.materialType === 'legacy' ? 'legacy' : 'structured',
   archived: Boolean(subject?.archived),
@@ -170,9 +352,21 @@ export const normalizeSubject = (subject, index = 0) => ({
   quiz: list(subject?.quiz).map(normalizeQuestion),
   glossary: list(subject?.glossary).map(normalizeGlossary),
   formulas: list(subject?.formulas).map(normalizeFormula),
+  contentBlocks: list(subject?.contentBlocks).map(normalizeBlock),
+  tools: list(subject?.tools).map(normalizeTool),
+  customTypes: list(subject?.customTypes).map((type, typeIndex) => ({
+    ...object(type),
+    id: text(type?.id, createContentId('custom-type')),
+    name: text(type?.name, `Custom type ${typeIndex + 1}`),
+    nameAr: text(type?.nameAr),
+    schema: object(type?.schema),
+  })),
+  metadata: object(subject?.metadata),
 });
 
 export const normalizeSubjects = (subjects) => list(subjects).map(normalizeSubject);
+
+const containsUnsafeMarkup = (value) => /<\s*script|javascript\s*:|on[a-z]+\s*=/i.test(String(value || ''));
 
 export const validateContentSubjects = (subjects) => {
   const errors = [];
@@ -198,20 +392,25 @@ export const validateContentSubjects = (subjects) => {
         itemIds.add(item.id);
       });
     };
+    const checkText = (value, label) => { if (containsUnsafeMarkup(value)) addError(`${subjectLabel}, ${label}: remove unsafe HTML or JavaScript.`); };
 
     checkCollectionIds(subject.modules, 'chapter');
     subject.modules.forEach((module, moduleIndex) => {
       if (!module.title.trim()) addError(`${subjectLabel}, chapter ${moduleIndex + 1}: add a title.`);
       if (!chapterSectionIds.has(module.section)) addError(`${subjectLabel}, ${module.title || `chapter ${moduleIndex + 1}`}: choose a valid assessment section.`);
+      checkText(module.title, `chapter ${moduleIndex + 1}`);
+      checkText(module.subtitle, `chapter ${moduleIndex + 1}`);
     });
     checkCollectionIds(subject.materials, 'note');
     subject.materials.forEach((material, materialIndex) => {
-      const hasContent = material.body.trim() || material.summary.trim() || material.example.trim() || material.points.length;
+      const hasContent = material.body.trim() || material.bodyAr.trim() || material.summary.trim() || material.summaryAr.trim() || material.example.trim() || material.points.length;
       if (!material.title.trim() || !hasContent) addError(`${subjectLabel}, note ${materialIndex + 1}: add a title and some note content.`);
+      [material.title, material.summary, material.body, material.example].forEach((value) => checkText(value, `note ${materialIndex + 1}`));
     });
     checkCollectionIds(subject.resources, 'resource');
     subject.resources.forEach((resource, resourceIndex) => {
       if (!resource.title.trim() || !resource.url.trim()) addError(`${subjectLabel}, resource ${resourceIndex + 1}: add both a title and URL.`);
+      if (resource.url && !/^https:\/\//i.test(resource.url)) addError(`${subjectLabel}, resource ${resourceIndex + 1}: use an HTTPS URL.`);
     });
     checkCollectionIds(subject.flashcards, 'flashcard');
     subject.flashcards.forEach((card, cardIndex) => {
@@ -219,7 +418,13 @@ export const validateContentSubjects = (subjects) => {
     });
     checkCollectionIds(subject.quiz, 'quiz item');
     subject.quiz.forEach((question, questionIndex) => {
-      if (!question.prompt.trim() || question.options.length !== 4 || question.options.some((option) => !option.trim())) addError(`${subjectLabel}, quiz question ${questionIndex + 1}: add a prompt and four answer options.`);
+      if (!question.prompt.trim()) addError(`${subjectLabel}, question ${questionIndex + 1}: add a prompt.`);
+      if (question.questionType === 'mcq') {
+        if (question.options.length < 2 || question.options.some((option) => !option.trim())) addError(`${subjectLabel}, question ${questionIndex + 1}: add all multiple-choice options.`);
+        if (!Number.isInteger(question.answer) || question.answer < 0 || question.answer >= question.options.length) addError(`${subjectLabel}, question ${questionIndex + 1}: choose a valid correct option.`);
+      }
+      if (question.points < 0 || question.negativePoints < 0) addError(`${subjectLabel}, question ${questionIndex + 1}: points cannot be negative.`);
+      [question.prompt, question.explanation, question.modelAnswer, question.hint].forEach((value) => checkText(value, `question ${questionIndex + 1}`));
     });
     checkCollectionIds(subject.glossary, 'glossary item');
     subject.glossary.forEach((item, itemIndex) => {
@@ -229,16 +434,30 @@ export const validateContentSubjects = (subjects) => {
     subject.formulas.forEach((formula, formulaIndex) => {
       if (!formula.name.trim() || !formula.expression.trim()) addError(`${subjectLabel}, formula ${formulaIndex + 1}: add a name and expression.`);
     });
+    checkCollectionIds(subject.contentBlocks, 'content block');
+    subject.contentBlocks.forEach((block, blockIndex) => {
+      if (!blockTypes.has(block.type)) addError(`${subjectLabel}, block ${blockIndex + 1}: choose a supported block type.`);
+      if (!chapterSectionIds.has(block.section)) addError(`${subjectLabel}, block ${blockIndex + 1}: choose a valid assessment section.`);
+      if (block.type === 'image' && block.content.url && !/^https:\/\//i.test(block.content.url) && !/^data:image\//i.test(block.content.url)) addError(`${subjectLabel}, block ${blockIndex + 1}: image URLs must use HTTPS.`);
+      if (block.type === 'link' && block.content.url && !/^https:\/\//i.test(block.content.url)) addError(`${subjectLabel}, block ${blockIndex + 1}: links must use HTTPS.`);
+      checkText(block.title, `block ${blockIndex + 1}`);
+      checkText(block.content.text, `block ${blockIndex + 1}`);
+    });
+    checkCollectionIds(subject.tools, 'tool');
+    checkCollectionIds(subject.customTypes, 'custom type');
   });
 
   return errors;
 };
 
-export const normalizeContentDocument = (candidate) => ({
-  version: CONTENT_VERSION,
-  updatedAt: text(candidate?.updatedAt, null),
-  subjects: normalizeSubjects(candidate?.subjects),
-});
+export const normalizeContentDocument = (candidate) => {
+  const source = typeof candidate === 'string' ? (() => { try { return JSON.parse(candidate); } catch { return {}; } })() : object(candidate);
+  return {
+    version: CONTENT_VERSION,
+    updatedAt: text(source.updatedAt, null),
+    subjects: normalizeSubjects(source.subjects),
+  };
+};
 
 export const mergeSubject = (base, override) => normalizeSubject({
   ...base,
@@ -250,6 +469,10 @@ export const mergeSubject = (base, override) => normalizeSubject({
   quiz: override && Object.prototype.hasOwnProperty.call(override, 'quiz') ? override.quiz : base?.quiz,
   glossary: override && Object.prototype.hasOwnProperty.call(override, 'glossary') ? override.glossary : base?.glossary,
   formulas: override && Object.prototype.hasOwnProperty.call(override, 'formulas') ? override.formulas : base?.formulas,
+  contentBlocks: override && Object.prototype.hasOwnProperty.call(override, 'contentBlocks') ? override.contentBlocks : base?.contentBlocks,
+  tools: override && Object.prototype.hasOwnProperty.call(override, 'tools') ? override.tools : base?.tools,
+  customTypes: override && Object.prototype.hasOwnProperty.call(override, 'customTypes') ? override.customTypes : base?.customTypes,
+  metadata: override && Object.prototype.hasOwnProperty.call(override, 'metadata') ? override.metadata : base?.metadata,
 });
 
 export const mergeSharedSubjects = (baseSubjects, sharedSubjects) => {
@@ -288,20 +511,41 @@ export const clearContentDraft = () => {
   if (typeof window !== 'undefined') window.localStorage.removeItem(CONTENT_STORAGE_KEY);
 };
 
+const readSupabaseContent = async () => {
+  const config = getSupabaseConfig();
+  const response = await fetch(`${config.url}/rest/v1/cms_public_subjects?select=document&order=code.asc`, {
+    headers: supabaseHeaders(),
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('Supabase shared content is unavailable.');
+  const rows = await response.json();
+  const subjects = list(rows).flatMap((row) => {
+    const document = typeof row.document === 'string' ? (() => { try { return JSON.parse(row.document); } catch { return null; } })() : row.document;
+    if (Array.isArray(document?.subjects)) return document.subjects;
+    return document && typeof document === 'object' ? [document] : [];
+  });
+  return normalizeContentDocument({ subjects });
+};
+
 export const loadSharedContent = async () => {
-  const response = await fetch(`/content.json?version=${Date.now()}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error('Shared study content is unavailable.');
-  return normalizeContentDocument(await response.json());
+  try {
+    return await readSupabaseContent();
+  } catch {
+    const response = await fetch(`/content.json?version=${Date.now()}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Shared study content is unavailable.');
+    return normalizeContentDocument(await response.json());
+  }
 };
 
 export const publishSharedContent = async (subjects, password) => {
-  const response = await fetch('/.netlify/functions/content-publish', {
+  const config = getSupabaseConfig();
+  const response = await fetch(`${config.url}/functions/v1/content-publish`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, content: buildContentDocument(subjects) }),
+    headers: supabaseHeaders(),
+    body: JSON.stringify({ action: 'publish', password, content: buildContentDocument(subjects) }),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'GitHub could not publish the content.');
+  if (!response.ok) throw new Error(payload.error || 'Supabase could not publish the content.');
   clearContentDraft();
   return payload;
 };

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildContentDocument, createBlankSubject, mergeSharedSubjects, normalizeContentDocument, validateContentSubjects } from '../src/lib/contentLibrary.js';
+import { buildContentDocument, createBlankContentBlock, createBlankSubject, mergeSharedSubjects, normalizeContentDocument, validateContentSubjects } from '../src/lib/contentLibrary.js';
 
 test('normalizes advanced content collections with safe defaults', () => {
   const subject = normalizeContentDocument({ subjects: [{ id: 'MIS101', code: 'MIS101', name: 'MIS', modules: [{ title: 'Chapter 1' }], materials: [{ title: 'Notes', body: 'Body' }], quiz: [{ prompt: 'Q', options: ['A', 'B'], answer: 1 }] }] }).subjects[0];
@@ -42,4 +42,14 @@ test('blocks incomplete public content before publishing', () => {
   const errors = validateContentSubjects([createBlankSubject()]);
   assert.ok(errors.some((error) => error.includes('real subject code')));
   assert.ok(errors.some((error) => error.includes('real subject name')));
+});
+
+test('preserves bilingual rich blocks and advanced response settings', () => {
+  const block = createBlankContentBlock('table');
+  const subject = normalizeContentDocument({ subjects: [{ id: 'MIS101', code: 'MIS101', name: 'MIS', contentBlocks: [{ ...block, title: 'Comparison table', titleAr: 'جدول مقارنة', content: { ...block.content, columns: ['English', 'Arabic'], rows: [['One', 'واحد']] } }], quiz: [{ id: 'q', questionType: 'paragraph', responseFormat: 'paragraph', prompt: 'Explain the idea.', promptAr: 'اشرح الفكرة', points: 5, modelAnswer: 'A complete answer.', modelAnswerAr: 'إجابة كاملة', rubric: [{ criterion: 'Accuracy', points: 5 }] }] }] }).subjects[0];
+  assert.equal(subject.contentBlocks[0].type, 'table');
+  assert.equal(subject.contentBlocks[0].content.rows[0][1], 'واحد');
+  assert.equal(subject.quiz[0].questionType, 'paragraph');
+  assert.equal(subject.quiz[0].points, 5);
+  assert.equal(subject.quiz[0].rubric[0].points, 5);
 });
