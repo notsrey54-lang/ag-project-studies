@@ -1,6 +1,6 @@
 // Only the Supabase publishable key belongs in the browser. Database RLS and
-// the Edge Function's password check protect writes; never put a service-role
-// or secret key in this file.
+// the Edge Function's password check protect writes; privileged keys stay on
+// the server.
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
 
 export const SUPABASE_URL = env.VITE_SUPABASE_URL || 'https://czcwbgnawflmsccrbfkj.supabase.co';

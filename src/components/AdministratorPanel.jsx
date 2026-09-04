@@ -20,7 +20,6 @@ import {
 } from '../lib/contentLibrary';
 import {
   changeAdminPassword,
-  isAdminUnlocked,
   lockAdmin,
   resetAdminPassword,
   unlockAdmin,
@@ -33,6 +32,14 @@ import {
   resetProgress,
 } from '../lib/studyProfile';
 import { ContentStudio } from './ContentStudio';
+import {
+  listCloudStudioVersions,
+  loadCloudStudioDraft,
+  loadCloudStudioVersion,
+  restoreCloudStudioVersion,
+  saveCloudStudioDraft,
+  updateStudioPresence,
+} from '../lib/studioApi';
 
 const TABS = [
   { id: 'overview', label: 'Dashboard', icon: '⌂' },
@@ -40,6 +47,7 @@ const TABS = [
   { id: 'chapters', label: 'Chapters', icon: '☷' },
   { id: 'notes', label: 'Notes & resources', icon: '▤' },
   { id: 'studio', label: 'Content studio', icon: '✦' },
+  { id: 'history', label: 'Draft history', icon: '↶' },
   { id: 'cards', label: 'Flashcards', icon: '◇' },
   { id: 'quizzes', label: 'Quizzes', icon: '?' },
   { id: 'library', label: 'Glossary & formulas', icon: 'Σ' },
@@ -136,7 +144,7 @@ function LoginView({ onUnlock }) {
   );
 }
 
-function AdminHeader({ selectedSubject, activeTab, dirty, message, publishState, onPublish, onSaveDraft, onExport, onImport, onLogout, onClose }) {
+function AdminHeader({ selectedSubject, activeTab, dirty, message, publishState, draftState, onPublish, onSaveDraft, onExport, onImport, onLogout, onClose }) {
   const tabLabel = TABS.find((tab) => tab.id === activeTab)?.label || 'Dashboard';
   return (
     <header className="admin-header">
@@ -147,7 +155,7 @@ function AdminHeader({ selectedSubject, activeTab, dirty, message, publishState,
       </div>
       <div className="admin-header__actions">
         <button type="button" className="text-button" onClick={onClose}>Back to site</button>
-        <button type="button" className="secondary-button" onClick={onSaveDraft}>Save draft</button>
+        <button type="button" className="secondary-button" onClick={onSaveDraft} disabled={draftState === 'saving'}>{draftState === 'saving' ? 'Saving…' : 'Save draft'}</button>
         <button type="button" className="secondary-button" onClick={onExport}>Export JSON</button>
         <label className="admin-import-button secondary-button">Import JSON<input type="file" accept="application/json,.json" onChange={onImport} /></label>
         <button type="button" className="primary-button" onClick={onPublish} disabled={publishState === 'publishing'}>{publishState === 'publishing' ? 'Publishing…' : 'Publish to Supabase'}</button>
@@ -338,7 +346,7 @@ function CardsTab({ subject, updateSubject }) {
 
 function QuizzesTab({ subject, updateSubject }) {
   const questionTypes = [['mcq', 'Multiple choice'], ['true_false', 'True / false'], ['short_answer', 'Short answer'], ['paragraph', 'Paragraph response'], ['bullet_point', 'Bullet-point response'], ['matching', 'Matching'], ['ordering', 'Ordering'], ['formula', 'Formula response']];
-  const responseFormats = [['single_choice', 'Single choice'], ['multiple_choice', 'Multiple choice'], ['short_text', 'Short text'], ['paragraph', 'Paragraph'], ['bullet', 'Bullet points'], ['number', 'Number'], ['formula', 'Formula'], ['matching', 'Matching'], ['ordering', 'Ordering']];
+  const responseFormats = [['single_choice', 'Single choice'], ['multiple_choice', 'Multiple choice'], ['short_text', 'Short text'], ['paragraph', 'Paragraph'], ['bullet_point', 'Bullet points'], ['number', 'Number'], ['formula', 'Formula'], ['matching', 'Matching'], ['ordering', 'Ordering']];
   if (!subject) return <EmptyEditor title="Create a subject first" description="Quiz questions need a subject to belong to." buttonLabel="Use the + button" onAdd={() => {}} />;
   const addQuestion = () => updateSubject({ quiz: [...subject.quiz, createBlankQuizQuestion()] });
   const updateQuestion = (id, patch) => updateSubject({ quiz: updateAt(subject.quiz, id, patch) });
@@ -369,6 +377,35 @@ function LibraryTab({ subject, updateSubject }) {
   );
 }
 
+function DraftHistoryTab({
+  cloudDraft,
+  cloudVersion,
+  versions,
+  activeEditors,
+  busy,
+  conflict,
+  onRefresh,
+  onLoadCloud,
+  onLoadVersion,
+  onRestoreVersion,
+}) {
+  const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Unknown time';
+  return <div className="admin-tab draft-history">
+    <div className="admin-tab-heading"><div><span className="eyebrow">Protected Supabase drafts</span><h2>Version history and recovery</h2><p>Manual saves and publish checkpoints are private to the administrator service. Restore an earlier checkpoint without changing the public site until you publish.</p></div><button type="button" className="secondary-button" onClick={onRefresh} disabled={busy}>{busy ? 'Refreshing…' : 'Refresh history'}</button></div>
+    {conflict ? <div className="draft-conflict" role="alert"><div><strong>Another administrator session saved a newer draft.</strong><p>Load version {conflict.version} before saving again so work is never overwritten silently.</p></div><button type="button" className="primary-button primary-button--small" onClick={onLoadCloud}>Load newer cloud draft</button></div> : null}
+    <div className="draft-history__summary">
+      <article><span>Current cloud version</span><strong>{cloudVersion || '—'}</strong><small>{cloudDraft ? formatDate(cloudDraft.updatedAt) : 'No cloud draft saved yet'}</small></article>
+      <article><span>Recovery checkpoints</span><strong>{versions.length}</strong><small>Latest 50 private versions</small></article>
+      <article><span>Active sessions</span><strong>{activeEditors.length + 1}</strong><small>{activeEditors.length ? `This administrator, ${activeEditors.map((editor) => editor.label).join(', ')}` : 'This administrator'}</small></article>
+    </div>
+    {cloudDraft ? <section className="draft-current-card"><div><span className="eyebrow">Latest working copy</span><h3>Cloud draft v{cloudDraft.version}</h3><p>Saved {formatDate(cloudDraft.updatedAt)} by {cloudDraft.updatedBy || 'administrator'}.</p></div><button type="button" className="secondary-button" onClick={onLoadCloud}>Open cloud draft</button></section> : null}
+    <div className="draft-version-list">
+      {versions.map((version) => <article key={version.id || `${version.version}-${version.created_at}`}><span className={`draft-version-list__kind draft-version-list__kind--${version.kind || 'manual'}`}>{version.kind || 'manual'}</span><div><strong>{version.label || `Version ${version.version}`}</strong><small>Version {version.version} · {formatDate(version.created_at)}</small></div><div><button type="button" className="text-button" onClick={() => onLoadVersion(version.version)} disabled={busy}>Open as draft</button><button type="button" className="text-button" onClick={() => onRestoreVersion(version.version)} disabled={busy}>Restore checkpoint</button></div></article>)}
+      {!versions.length ? <div className="admin-empty"><span className="admin-empty__icon">↶</span><strong>No recovery checkpoints yet</strong><p>Use Save draft or Publish to create the first protected checkpoint.</p></div> : null}
+    </div>
+  </div>;
+}
+
 function PasswordDialog({ onClose, onChanged }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -392,7 +429,7 @@ function PasswordDialog({ onClose, onChanged }) {
 }
 
 export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPublished, onClose }) {
-  const [unlocked, setUnlocked] = useState(isAdminUnlocked);
+  const [unlocked, setUnlocked] = useState(false);
   const [sessionPassword, setSessionPassword] = useState('');
   const [editorSubjects, setEditorSubjects] = useState(() => normalizeSubjects(subjects));
   const [selectedId, setSelectedId] = useState(() => subjects[0]?.id || null);
@@ -403,6 +440,13 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
   const [publishError, setPublishError] = useState('');
   const [hasDraft, setHasDraft] = useState(() => Boolean(loadContentDraft()));
   const [passwordDialog, setPasswordDialog] = useState(false);
+  const [draftState, setDraftState] = useState('idle');
+  const [cloudDraft, setCloudDraft] = useState(null);
+  const [cloudVersion, setCloudVersion] = useState(0);
+  const [cloudVersions, setCloudVersions] = useState([]);
+  const [activeEditors, setActiveEditors] = useState([]);
+  const [cloudConflict, setCloudConflict] = useState(null);
+  const [studioSessionId] = useState(() => `studio-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
 
   useEffect(() => {
     if (!dirty) {
@@ -410,6 +454,51 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
       setSelectedId((current) => subjects.some((subject) => subject.id === current) ? current : subjects[0]?.id || null);
     }
   }, [subjects, dirty]);
+
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const timeout = window.setTimeout(() => {
+      saveContentDraft(editorSubjects);
+      setHasDraft(true);
+    }, 900);
+    return () => window.clearTimeout(timeout);
+  }, [dirty, editorSubjects]);
+
+  useEffect(() => {
+    if (!sessionPassword) return undefined;
+    let current = true;
+    Promise.all([loadCloudStudioDraft(sessionPassword), listCloudStudioVersions(sessionPassword)])
+      .then(([draftResult, versionsResult]) => {
+        if (!current) return;
+        setCloudDraft(draftResult.draft || null);
+        setCloudVersion(Number(draftResult.draft?.version || 0));
+        setCloudVersions(versionsResult.versions || []);
+        if (draftResult.draft) setMessage(`Protected cloud draft v${draftResult.draft.version} is available in Draft history.`);
+      })
+      .catch((error) => {
+        if (current) setPublishError(error.message || 'Cloud draft history could not be loaded.');
+      });
+    return () => { current = false; };
+  }, [sessionPassword]);
+
+  useEffect(() => {
+    if (!sessionPassword) return undefined;
+    let current = true;
+    const heartbeat = () => updateStudioPresence(sessionPassword, {
+      sessionId: studioSessionId,
+      label: 'Administrator',
+      subjectId: selectedId || '',
+      pageId: activeTab,
+    }).then((result) => {
+      if (current) setActiveEditors((result.active || []).filter((editor) => editor.session_id !== studioSessionId));
+    }).catch(() => {});
+    heartbeat();
+    const interval = window.setInterval(heartbeat, 45_000);
+    return () => {
+      current = false;
+      window.clearInterval(interval);
+    };
+  }, [activeTab, selectedId, sessionPassword, studioSessionId]);
 
   const selectedSubject = editorSubjects.find((subject) => subject.id === selectedId) || null;
 
@@ -451,10 +540,39 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
     updateSelectedSubject({ archived: !selectedSubject.archived });
   };
 
-  const saveDraft = () => {
+  const saveDraft = async () => {
     saveContentDraft(editorSubjects);
     setHasDraft(true);
-    setMessage('Draft saved on this device.');
+    if (!sessionPassword) {
+      setMessage('Draft saved on this device. Reopen Administrator to save a cloud checkpoint.');
+      return;
+    }
+    setDraftState('saving');
+    setPublishError('');
+    try {
+      const result = await saveCloudStudioDraft(sessionPassword, buildContentDocument(editorSubjects), {
+        baseVersion: cloudVersion,
+        checkpoint: true,
+        label: `Manual save · ${new Date().toLocaleString()}`,
+        kind: 'manual',
+      });
+      setCloudDraft(result.draft);
+      setCloudVersion(Number(result.draft?.version || cloudVersion + 1));
+      setCloudConflict(null);
+      const versionResult = await listCloudStudioVersions(sessionPassword);
+      setCloudVersions(versionResult.versions || []);
+      setMessage(`Draft v${result.draft?.version || cloudVersion + 1} saved privately to Supabase and on this device.`);
+    } catch (error) {
+      if (error.code === 'DRAFT_CONFLICT' || error.status === 409) {
+        const latest = error.payload?.draft || null;
+        setCloudDraft(latest);
+        setCloudVersion(Number(latest?.version || error.payload?.currentVersion || cloudVersion));
+        setCloudConflict(latest);
+      }
+      setPublishError(error.message || 'The protected cloud draft could not be saved.');
+    } finally {
+      setDraftState('idle');
+    }
   };
 
   const loadDraft = () => {
@@ -471,6 +589,79 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
     clearContentDraft();
     setHasDraft(false);
     setMessage('Local draft discarded.');
+  };
+
+  const refreshCloudHistory = async () => {
+    if (!sessionPassword) return;
+    setDraftState('saving');
+    setPublishError('');
+    try {
+      const [draftResult, versionsResult] = await Promise.all([loadCloudStudioDraft(sessionPassword), listCloudStudioVersions(sessionPassword)]);
+      setCloudDraft(draftResult.draft || null);
+      setCloudVersion(Number(draftResult.draft?.version || 0));
+      setCloudVersions(versionsResult.versions || []);
+      setMessage('Protected draft history refreshed.');
+    } catch (error) {
+      setPublishError(error.message || 'Draft history could not be refreshed.');
+    } finally {
+      setDraftState('idle');
+    }
+  };
+
+  const openCloudDocument = (document, label) => {
+    const parsed = normalizeContentDocument(document);
+    if (!parsed.subjects.length) {
+      setPublishError('That cloud version did not contain any subjects.');
+      return;
+    }
+    setEditorSubjects(parsed.subjects);
+    setSelectedId((current) => parsed.subjects.some((subject) => subject.id === current) ? current : parsed.subjects[0].id);
+    setDirty(true);
+    setHasDraft(true);
+    setCloudConflict(null);
+    setMessage(`${label} opened as the editable draft. The public site is unchanged.`);
+  };
+
+  const loadCurrentCloudDraft = () => {
+    if (cloudDraft?.document) openCloudDocument(cloudDraft.document, `Cloud draft v${cloudDraft.version}`);
+  };
+
+  const openCloudVersion = async (version) => {
+    if (!sessionPassword) return;
+    setDraftState('saving');
+    setPublishError('');
+    try {
+      const result = await loadCloudStudioVersion(sessionPassword, version);
+      openCloudDocument(result.version.document, result.version.label || `Version ${version}`);
+    } catch (error) {
+      setPublishError(error.message || 'That cloud version could not be opened.');
+    } finally {
+      setDraftState('idle');
+    }
+  };
+
+  const restoreCloudVersion = async (version) => {
+    if (!sessionPassword || !window.confirm(`Restore cloud checkpoint v${version} as the newest working draft? The public site will not change until you publish.`)) return;
+    setDraftState('saving');
+    setPublishError('');
+    try {
+      const result = await restoreCloudStudioVersion(sessionPassword, version, cloudVersion);
+      setCloudDraft(result.draft);
+      setCloudVersion(Number(result.draft?.version || cloudVersion + 1));
+      openCloudDocument(result.draft.document, `Restored checkpoint v${version}`);
+      const versionsResult = await listCloudStudioVersions(sessionPassword);
+      setCloudVersions(versionsResult.versions || []);
+    } catch (error) {
+      if (error.code === 'DRAFT_CONFLICT' || error.status === 409) {
+        const latest = error.payload?.draft || null;
+        setCloudDraft(latest);
+        setCloudVersion(Number(latest?.version || error.payload?.currentVersion || cloudVersion));
+        setCloudConflict(latest);
+      }
+      setPublishError(error.message || 'That checkpoint could not be restored.');
+    } finally {
+      setDraftState('idle');
+    }
   };
 
   const exportJson = () => {
@@ -514,15 +705,33 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
     setPublishState('publishing');
     setPublishError('');
     try {
+      const checkpoint = await saveCloudStudioDraft(sessionPassword, buildContentDocument(editorSubjects), {
+        baseVersion: cloudVersion,
+        checkpoint: true,
+        label: `Publish checkpoint · ${new Date().toLocaleString()}`,
+        kind: 'publish',
+      });
+      setCloudDraft(checkpoint.draft);
+      setCloudVersion(Number(checkpoint.draft?.version || cloudVersion + 1));
+      setCloudConflict(null);
       await publishSharedContent(editorSubjects, sessionPassword);
       const publicSubjects = editorSubjects.filter((subject) => !subject.archived);
       onPublished(publicSubjects);
       setDirty(false);
       setHasDraft(false);
+      clearContentDraft();
       setMessage('Published to Supabase. Students will receive the shared content on their next refresh.');
       setPublishState('success');
+      listCloudStudioVersions(sessionPassword).then((result) => setCloudVersions(result.versions || [])).catch(() => {});
       window.setTimeout(() => setPublishState('idle'), 4000);
     } catch (error) {
+      if (error.code === 'DRAFT_CONFLICT' || error.status === 409) {
+        const latest = error.payload?.draft || null;
+        setCloudDraft(latest);
+        setCloudVersion(Number(latest?.version || error.payload?.currentVersion || cloudVersion));
+        setCloudConflict(latest);
+        setActiveTab('history');
+      }
       setPublishState('error');
       setPublishError(error.message || 'Supabase could not publish this content.');
     }
@@ -569,8 +778,8 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
   if (!unlocked) return <LoginView onUnlock={(password) => { setSessionPassword(password); setUnlocked(true); }} />;
 
   return (
-    <main className="admin-page">
-      <AdminHeader selectedSubject={selectedSubject} activeTab={activeTab} dirty={dirty} message={message} publishState={publishState} onPublish={publish} onSaveDraft={saveDraft} onExport={exportJson} onImport={importJson} onLogout={logout} onClose={onClose} />
+    <main className={`admin-page${activeTab === 'studio' ? ' admin-page--studio' : ''}`}>
+      <AdminHeader selectedSubject={selectedSubject} activeTab={activeTab} dirty={dirty} message={message} publishState={publishState} draftState={draftState} onPublish={publish} onSaveDraft={saveDraft} onExport={exportJson} onImport={importJson} onLogout={logout} onClose={onClose} />
       <div className="admin-layout">
         <SubjectPicker subjects={editorSubjects} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); if (activeTab === 'overview') setActiveTab('subject'); }} onAdd={addSubject} onDuplicate={duplicateSubject} onArchive={archiveSubject} />
         <div className="admin-main">
@@ -581,7 +790,8 @@ export function AdministratorPanel({ subjects, profile, onUpdateProfile, onPubli
           {activeTab === 'subject' ? <SubjectTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'chapters' ? <ChaptersTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'notes' ? <NotesTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
-          {activeTab === 'studio' ? <ContentStudio subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
+          {activeTab === 'studio' ? <ContentStudio subject={selectedSubject} updateSubject={updateSelectedSubject} password={sessionPassword} onMessage={setMessage} onError={setPublishError} /> : null}
+          {activeTab === 'history' ? <DraftHistoryTab cloudDraft={cloudDraft} cloudVersion={cloudVersion} versions={cloudVersions} activeEditors={activeEditors} busy={draftState === 'saving'} conflict={cloudConflict} onRefresh={refreshCloudHistory} onLoadCloud={loadCurrentCloudDraft} onLoadVersion={openCloudVersion} onRestoreVersion={restoreCloudVersion} /> : null}
           {activeTab === 'cards' ? <CardsTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'quizzes' ? <QuizzesTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
           {activeTab === 'library' ? <LibraryTab subject={selectedSubject} updateSubject={updateSelectedSubject} /> : null}
