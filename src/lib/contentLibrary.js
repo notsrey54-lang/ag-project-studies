@@ -1,9 +1,8 @@
 import { getSupabaseConfig, supabaseHeaders } from './supabaseClient.js';
-import { normalizeRichRuns, richRunsToText, textToRichRuns } from './richText.js';
 
 const CONTENT_STORAGE_KEY = 'ag-study-content-draft-v1';
 
-export const CONTENT_VERSION = 2;
+export const CONTENT_VERSION = 1;
 
 export const CHAPTER_SECTIONS = Object.freeze([
   { id: 'course', label: 'Course content' },
@@ -12,16 +11,8 @@ export const CHAPTER_SECTIONS = Object.freeze([
 ]);
 
 const chapterSectionIds = new Set(CHAPTER_SECTIONS.map((section) => section.id));
-const blockTypes = new Set(['paragraph', 'rich_text', 'heading', 'bullet_list', 'numbered_list', 'checklist', 'callout', 'quote', 'table', 'formula', 'comparison', 'timeline', 'link', 'image', 'video', 'audio', 'code', 'drawing', 'divider', 'presentation', 'custom']);
+const blockTypes = new Set(['paragraph', 'heading', 'bullet_list', 'numbered_list', 'checklist', 'callout', 'quote', 'table', 'formula', 'comparison', 'timeline', 'link', 'image', 'video', 'audio', 'code', 'drawing', 'custom']);
 const toolTypes = new Set(['calculator', 'formula_practice', 'graph', 'matching', 'timeline', 'custom']);
-const officeFonts = new Set(['Aptos', 'Arial', 'Georgia', 'Times New Roman', 'Verdana']);
-const richTextScales = new Set(['body', 'compact', 'heading1', 'heading2', 'title', 'subtitle', 'lead', 'small']);
-const pageThemes = new Set(['white', 'warm', 'focus']);
-const slideLayouts = new Set(['title-content', 'title-only', 'split', 'quote']);
-const slideTones = new Set(['gold', 'green', 'blue', 'purple']);
-const slideTransitions = new Set(['none', 'fade', 'push', 'wipe']);
-const slideAnimations = new Set(['none', 'appear', 'fade', 'float']);
-const slideShapeTypes = new Set(['rectangle', 'circle', 'line', 'arrow', 'star']);
 
 export const getChapterSectionLabel = (section) => CHAPTER_SECTIONS.find((candidate) => candidate.id === section)?.label || 'Course content';
 
@@ -149,85 +140,42 @@ export const createBlankFormula = () => ({
   exampleAr: '',
 });
 
-export const createBlankSlide = () => ({
-  id: createContentId('slide'),
-  layout: 'title-content',
-  tone: 'gold',
-  title: 'Untitled slide',
+export const createBlankContentBlock = (type = 'paragraph') => ({
+  id: createContentId('block'),
+  type: blockTypes.has(type) ? type : 'paragraph',
+  title: '',
   titleAr: '',
-  subtitle: '',
-  subtitleAr: '',
-  body: '',
-  bodyAr: '',
-  items: [],
-  itemsAr: [],
-  notes: '',
-  shapes: [],
-  fontFamily: 'Aptos',
-  fontSize: 28,
-  bold: false,
-  italic: false,
-  underline: false,
-  align: 'center',
-  direction: 'ltr',
-  transition: 'none',
-  transitionDuration: 500,
-  animation: 'none',
+  chapterId: '',
+  section: 'course',
+  order: 0,
+  content: {
+    text: '',
+    textAr: '',
+    items: [],
+    itemsAr: [],
+    columns: ['Column 1', 'Column 2'],
+    rows: [['', '']],
+    formula: '',
+    formulaAr: '',
+    url: '',
+    label: '',
+    labelAr: '',
+    alt: '',
+    source: '',
+    code: '',
+    language: 'text',
+    quote: '',
+    quoteAr: '',
+    citation: '',
+    leftTitle: '',
+    rightTitle: '',
+    leftItems: [],
+    rightItems: [],
+    events: [],
+    imageData: '',
+    config: {},
+  },
 });
-
-export const createBlankContentBlock = (type = 'paragraph') => {
-  const normalizedType = blockTypes.has(type) ? type : 'paragraph';
-  const block = {
-    id: createContentId('block'),
-    type: normalizedType,
-    title: normalizedType === 'presentation' ? 'New presentation' : '',
-    titleAr: '',
-    chapterId: '',
-    section: 'course',
-    order: 0,
-    content: {
-      text: '',
-      textAr: '',
-      runs: [],
-      items: [],
-      itemsAr: [],
-      columns: ['Column 1', 'Column 2'],
-      rows: [['', '']],
-      formula: '',
-      formulaAr: '',
-      url: '',
-      label: '',
-      labelAr: '',
-      alt: '',
-      source: '',
-      code: '',
-      language: 'text',
-      quote: '',
-      quoteAr: '',
-      citation: '',
-      leftTitle: '',
-      rightTitle: '',
-      leftItems: [],
-      rightItems: [],
-      events: [],
-      imageData: '',
-      alignment: 'start',
-      direction: 'ltr',
-      fontFamily: 'Aptos',
-      fontSize: 12,
-      textColor: '#111111',
-      highlight: 'transparent',
-      scale: 'body',
-      pageTheme: 'white',
-      pageMargins: 'normal',
-      pageOrientation: 'portrait',
-      level: 2,
-      slides: normalizedType === 'presentation' ? [createBlankSlide()] : [],
-      config: {},
-    },
-  };
-  return block;
-};
 
 export const createBlankTool = () => ({
   id: createContentId('tool'),
@@ -355,78 +303,19 @@ const normalizeFormula = (formula, index) => ({
   exampleAr: text(formula?.exampleAr),
 });
 
-const normalizeSlideShape = (shape, index) => ({
-  ...object(shape),
-  id: text(shape?.id, createContentId(`shape-${index + 1}`)),
-  type: slideShapeTypes.has(shape?.type) ? shape.type : 'rectangle',
-  x: Math.min(95, Math.max(0, finiteNumber(shape?.x, 35))),
-  y: Math.min(95, Math.max(0, finiteNumber(shape?.y, 42))),
-  width: Math.min(100, Math.max(2, finiteNumber(shape?.width, 15))),
-  height: Math.min(100, Math.max(2, finiteNumber(shape?.height, 15))),
-  fill: /^#[0-9a-f]{6}$/i.test(text(shape?.fill)) ? shape.fill : '#d2a216',
-  text: text(shape?.text),
-});
-
-const normalizeSlide = (slide, index) => ({
-  ...object(slide),
-  id: text(slide?.id, createContentId('slide')),
-  layout: slideLayouts.has(slide?.layout) ? slide.layout : 'title-content',
-  tone: slideTones.has(slide?.tone) ? slide.tone : 'gold',
-  title: text(slide?.title, `Slide ${index + 1}`),
-  titleAr: text(slide?.titleAr),
-  subtitle: text(slide?.subtitle),
-  subtitleAr: text(slide?.subtitleAr),
-  body: text(slide?.body),
-  bodyAr: text(slide?.bodyAr),
-  items: list(slide?.items).map((item) => text(item)).filter(Boolean),
-  itemsAr: list(slide?.itemsAr).map((item) => text(item)).filter(Boolean),
-  notes: text(slide?.notes),
-  shapes: list(slide?.shapes).slice(0, 50).map(normalizeSlideShape),
-  fontFamily: officeFonts.has(slide?.fontFamily) ? slide.fontFamily : 'Aptos',
-  fontSize: Math.min(54, Math.max(18, finiteNumber(slide?.fontSize, 28))),
-  bold: Boolean(slide?.bold),
-  italic: Boolean(slide?.italic),
-  underline: Boolean(slide?.underline),
-  align: ['start', 'center', 'end'].includes(slide?.align) ? slide.align : 'center',
-  direction: slide?.direction === 'rtl' ? 'rtl' : 'ltr',
-  transition: slideTransitions.has(slide?.transition) ? slide.transition : 'none',
-  transitionDuration: Math.min(2000, Math.max(200, finiteNumber(slide?.transitionDuration, 500))),
-  animation: slideAnimations.has(slide?.animation) ? slide.animation : 'none',
-});
-
 const normalizeBlock = (block, index) => {
   const rawContent = object(block?.content);
-  const type = blockTypes.has(block?.type) ? block.type : 'paragraph';
-  const fallback = createBlankContentBlock(type);
-  const runs = normalizeRichRuns(rawContent.runs);
-  const slides = list(rawContent.slides).map(normalizeSlide);
+  const fallback = createBlankContentBlock(block?.type);
   return {
     ...object(block),
     id: text(block?.id, createContentId('block')),
-    type,
+    type: blockTypes.has(block?.type) ? block.type : 'paragraph',
     title: text(block?.title),
     titleAr: text(block?.titleAr),
     chapterId: text(block?.chapterId),
     section: chapterSectionIds.has(block?.section) ? block.section : 'course',
     order: finiteNumber(block?.order, index),
-    content: {
-      ...fallback.content,
-      ...rawContent,
-      runs: runs.length ? runs : type === 'rich_text' ? textToRichRuns(text(rawContent.text)) : [],
-      text: type === 'rich_text' && runs.length ? richRunsToText(runs) : text(rawContent.text),
-      alignment: ['start', 'center', 'end', 'justify'].includes(rawContent.alignment) ? rawContent.alignment : 'start',
-      direction: rawContent.direction === 'rtl' ? 'rtl' : 'ltr',
-      fontFamily: officeFonts.has(rawContent.fontFamily) ? rawContent.fontFamily : 'Aptos',
-      fontSize: Math.min(42, Math.max(10, finiteNumber(rawContent.fontSize, 12))),
-      textColor: /^#[0-9a-f]{6}$/i.test(text(rawContent.textColor)) ? rawContent.textColor : '#111111',
-      highlight: rawContent.highlight === 'transparent' || /^#[0-9a-f]{6}$/i.test(text(rawContent.highlight)) ? rawContent.highlight : 'transparent',
-      scale: richTextScales.has(rawContent.scale) ? rawContent.scale : 'body',
-      pageTheme: pageThemes.has(rawContent.pageTheme) ? rawContent.pageTheme : 'white',
-      pageMargins: ['normal', 'narrow', 'wide'].includes(rawContent.pageMargins) ? rawContent.pageMargins : 'normal',
-      pageOrientation: rawContent.pageOrientation === 'landscape' ? 'landscape' : 'portrait',
-      level: Math.min(6, Math.max(1, Math.trunc(finiteNumber(rawContent.level, 2)))),
-      slides: type === 'presentation' ? (slides.length ? slides : [createBlankSlide()]) : slides,
-    },
+    content: { ...fallback.content, ...rawContent },
   };
 };
 
@@ -477,12 +366,7 @@ export const normalizeSubject = (subject, index = 0) => ({
 
 export const normalizeSubjects = (subjects) => list(subjects).map(normalizeSubject);
 
-const containsUnsafeMarkup = (value) => {
-  if (typeof value === 'string') return /<\s*script|javascript\s*:|on[a-z]+\s*=/i.test(value);
-  if (Array.isArray(value)) return value.some(containsUnsafeMarkup);
-  if (value && typeof value === 'object') return Object.values(value).some(containsUnsafeMarkup);
-  return false;
-};
+const containsUnsafeMarkup = (value) => /<\s*script|javascript\s*:|on[a-z]+\s*=/i.test(String(value || ''));
 
 export const validateContentSubjects = (subjects) => {
   const errors = [];
@@ -556,18 +440,8 @@ export const validateContentSubjects = (subjects) => {
       if (!chapterSectionIds.has(block.section)) addError(`${subjectLabel}, block ${blockIndex + 1}: choose a valid assessment section.`);
       if (block.type === 'image' && block.content.url && !/^https:\/\//i.test(block.content.url) && !/^data:image\//i.test(block.content.url)) addError(`${subjectLabel}, block ${blockIndex + 1}: image URLs must use HTTPS.`);
       if (block.type === 'link' && block.content.url && !/^https:\/\//i.test(block.content.url)) addError(`${subjectLabel}, block ${blockIndex + 1}: links must use HTTPS.`);
-      if (block.type === 'rich_text' && !richRunsToText(block.content.runs).trim() && !block.content.text.trim()) addError(`${subjectLabel}, block ${blockIndex + 1}: add text or remove the empty document block.`);
-      if (block.type === 'presentation') {
-        if (!block.content.slides.length) addError(`${subjectLabel}, presentation ${blockIndex + 1}: add at least one slide.`);
-        const slideIds = new Set();
-        block.content.slides.forEach((slide, slideIndex) => {
-          if (slideIds.has(slide.id)) addError(`${subjectLabel}, presentation ${blockIndex + 1}: duplicate slide ID.`);
-          slideIds.add(slide.id);
-          if (!slide.title.trim() && !slide.titleAr.trim()) addError(`${subjectLabel}, presentation ${blockIndex + 1}, slide ${slideIndex + 1}: add a title.`);
-        });
-      }
       checkText(block.title, `block ${blockIndex + 1}`);
-      checkText(block.content, `block ${blockIndex + 1}`);
+      checkText(block.content.text, `block ${blockIndex + 1}`);
     });
     checkCollectionIds(subject.tools, 'tool');
     checkCollectionIds(subject.customTypes, 'custom type');

@@ -1,45 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  CHAPTER_SECTIONS,
-  createBlankContentBlock,
-  createBlankTool,
-} from '../lib/contentLibrary.js';
-import { AssetUploader } from './studio/AssetUploader.jsx';
-import { HtmlImportPanel } from './studio/HtmlImportPanel.jsx';
-import { LivePreview } from './studio/LivePreview.jsx';
-import { PresentationEditor } from './studio/PresentationEditor.jsx';
-import { RichTextEditor } from './studio/RichTextEditor.jsx';
-import {
-  DrawingPad,
-  JsonField,
-  LanguageFields,
-  lineList,
-  linesText,
-  StudioField,
-  StudioText,
-} from './studio/StudioFields.jsx';
+import { useEffect, useRef, useState } from 'react';
+import { CHAPTER_SECTIONS, createBlankContentBlock, createBlankTool } from '../lib/contentLibrary';
 
 const BLOCK_TYPES = [
-  ['rich_text', 'Rich text', '¶'],
-  ['heading', 'Heading', 'H'],
-  ['paragraph', 'Plain paragraph', 'T'],
-  ['bullet_list', 'Bullet points', '•'],
-  ['numbered_list', 'Numbered steps', '1'],
-  ['checklist', 'Checklist', '✓'],
-  ['callout', 'Key callout', '!'],
-  ['quote', 'Quote', '“'],
-  ['table', 'Table', '▦'],
-  ['formula', 'Formula', 'Σ'],
-  ['comparison', 'Comparison', '⇄'],
-  ['timeline', 'Timeline', '↦'],
-  ['link', 'Resource link', '↗'],
-  ['image', 'Image', '▧'],
-  ['video', 'Video link', '▶'],
-  ['audio', 'Audio link', '♪'],
-  ['code', 'Code block', '</>'],
-  ['drawing', 'Drawing', '✎'],
-  ['divider', 'Divider', '—'],
-  ['custom', 'Custom data', '{}'],
+  ['paragraph', 'Paragraph'],
+  ['heading', 'Heading'],
+  ['bullet_list', 'Bullet points'],
+  ['numbered_list', 'Numbered steps'],
+  ['checklist', 'Checklist'],
+  ['callout', 'Key callout'],
+  ['quote', 'Quote'],
+  ['table', 'Table'],
+  ['formula', 'Formula'],
+  ['comparison', 'Comparison'],
+  ['timeline', 'Timeline'],
+  ['link', 'Resource link'],
+  ['image', 'Image'],
+  ['video', 'Video link'],
+  ['audio', 'Audio link'],
+  ['code', 'Code block'],
+  ['drawing', 'Drawing'],
+  ['custom', 'Custom JSON block'],
 ];
 
 const TOOL_TYPES = [
@@ -51,202 +31,177 @@ const TOOL_TYPES = [
   ['custom', 'Custom tool configuration'],
 ];
 
-const MODES = [
-  { id: 'document', label: 'Document', icon: 'W', description: 'Word-style pages' },
-  { id: 'slides', label: 'Slides', icon: 'P', description: 'Presentation builder' },
-  { id: 'html', label: 'HTML import', icon: '</>', description: 'Theme converter' },
-  { id: 'assets', label: 'Files', icon: '＋', description: 'Media and documents' },
-  { id: 'tools', label: 'Tools', icon: '⌘', description: 'Interactive content' },
-];
-
 const updateAt = (items, id, patch) => items.map((item) => item.id === id ? { ...item, ...patch } : item);
 const clone = (value) => JSON.parse(JSON.stringify(value));
-const labelForBlock = (block) => block.type === 'presentation' ? 'Presentation' : BLOCK_TYPES.find(([id]) => id === block.type)?.[1] || 'Content block';
-const iconForBlock = (block) => block.type === 'presentation' ? 'P' : BLOCK_TYPES.find(([id]) => id === block.type)?.[2] || '•';
+const lineList = (value) => String(value || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+const linesText = (value) => Array.isArray(value) ? value.join('\n') : '';
 
-function BlockFields({ block, update, onNotice }) {
+function StudioField({ label, value, onChange, placeholder = '', type = 'text', min, max, step, help }) {
+  return <label className="studio-field"><span>{label}</span><input type={type} value={value ?? ''} min={min} max={max} step={step} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />{help ? <small>{help}</small> : null}</label>;
+}
+
+function StudioText({ label, value, onChange, placeholder = '', rows = 5, dir, help }) {
+  return <label className="studio-field studio-field--wide"><span>{label}</span><textarea value={value ?? ''} rows={rows} dir={dir} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />{help ? <small>{help}</small> : null}</label>;
+}
+
+function LanguageFields({ value, onChange, label = 'Text' }) {
+  const content = value || {};
+  return <div className="studio-language-grid"><StudioText label={`${label} · English`} value={content.text} onChange={(text) => onChange({ ...content, text })} rows={5} /><StudioText label={`${label} · Arabic`} value={content.textAr} onChange={(textAr) => onChange({ ...content, textAr })} dir="rtl" rows={5} /></div>;
+}
+
+function JsonField({ label, value, onChange, help }) {
+  const [draft, setDraft] = useState(() => JSON.stringify(value || {}, null, 2));
+  useEffect(() => setDraft(JSON.stringify(value || {}, null, 2)), [value]);
+  const change = (next) => {
+    setDraft(next);
+    try { onChange(JSON.parse(next)); } catch { /* keep the draft editable until valid JSON is entered */ }
+  };
+  return <label className="studio-field studio-field--wide"><span>{label}</span><textarea value={draft} rows={8} spellCheck="false" onChange={(event) => change(event.target.value)} />{help ? <small>{help}</small> : null}</label>;
+}
+
+function DrawingPad({ value, onChange }) {
+  const canvasRef = useRef(null);
+  const drawingRef = useRef(false);
+  const [tool, setTool] = useState('pen');
+  const [color, setColor] = useState('#5b4a12');
+  const [width, setWidth] = useState(4);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = 960;
+    canvas.height = 440;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fffdf5';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    if (value) {
+      const image = new Image();
+      image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      image.src = value;
+    }
+  }, []);
+
+  const point = (event) => {
+    const canvas = canvasRef.current;
+    const bounds = canvas.getBoundingClientRect();
+    return { x: (event.clientX - bounds.left) * (canvas.width / bounds.width), y: (event.clientY - bounds.top) * (canvas.height / bounds.height) };
+  };
+  const start = (event) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const context = canvasRef.current.getContext('2d');
+    const { x, y } = point(event);
+    context.beginPath();
+    context.moveTo(x, y);
+    drawingRef.current = true;
+  };
+  const move = (event) => {
+    if (!drawingRef.current) return;
+    const context = canvasRef.current.getContext('2d');
+    const { x, y } = point(event);
+    context.lineTo(x, y);
+    context.strokeStyle = tool === 'eraser' ? '#fffdf5' : color;
+    context.lineWidth = tool === 'eraser' ? Math.max(width * 3, 12) : width;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.stroke();
+  };
+  const end = () => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    onChange(canvasRef.current.toDataURL('image/png'));
+  };
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fffdf5';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    onChange('');
+  };
+
+  return <div className="studio-drawing"><div className="studio-drawing__toolbar"><button type="button" className={tool === 'pen' ? 'studio-tool-button studio-tool-button--active' : 'studio-tool-button'} onClick={() => setTool('pen')}>Pen</button><button type="button" className={tool === 'eraser' ? 'studio-tool-button studio-tool-button--active' : 'studio-tool-button'} onClick={() => setTool('eraser')}>Eraser</button><label>Colour <input type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label><label>Width <input type="range" min="1" max="18" value={width} onChange={(event) => setWidth(Number(event.target.value))} /></label><button type="button" className="studio-tool-button" onClick={clear}>Clear</button></div><canvas ref={canvasRef} className="studio-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={end} aria-label="Drawing editor" /></div>;
+}
+
+function BlockFields({ block, update }) {
   const content = block.content || {};
   const setContent = (patch) => update({ content: { ...content, ...patch } });
-
-  if (block.type === 'rich_text') return <RichTextEditor block={block} update={update} onNotice={onNotice} />;
-  if (block.type === 'presentation') return <PresentationEditor block={block} update={update} />;
-  if (block.type === 'divider') return <div className="studio-divider-editor"><span /><strong>Section divider</strong><span /></div>;
-  if (['paragraph', 'callout'].includes(block.type)) return <LanguageFields label={block.type === 'callout' ? 'Callout text' : 'Paragraph'} value={content} onChange={setContent} />;
-  if (block.type === 'heading') return <div className="studio-form-stack"><label className="studio-field"><span>Heading level</span><select value={content.level || 2} onChange={(event) => setContent({ level: Number(event.target.value) })}><option value="2">Heading 2</option><option value="3">Heading 3</option><option value="4">Heading 4</option></select></label><LanguageFields label="Heading" value={content} onChange={setContent} rows={3} /></div>;
+  if (['paragraph', 'heading', 'callout'].includes(block.type)) return <LanguageFields label={block.type === 'heading' ? 'Heading' : block.type === 'callout' ? 'Callout text' : 'Paragraph'} value={content} onChange={setContent} />;
   if (['bullet_list', 'numbered_list', 'checklist'].includes(block.type)) return <div className="studio-language-grid"><StudioText label="Items · English" value={linesText(content.items)} onChange={(value) => setContent({ items: lineList(value) })} placeholder="One item per line" rows={8} /><StudioText label="Items · Arabic" value={linesText(content.itemsAr)} onChange={(value) => setContent({ itemsAr: lineList(value) })} dir="rtl" placeholder="عنصر واحد في كل سطر" rows={8} /></div>;
-  if (block.type === 'quote') return <div className="studio-form-grid"><StudioText label="Quote · English" value={content.quote} onChange={(quote) => setContent({ quote })} rows={5} /><StudioText label="Quote · Arabic" value={content.quoteAr} onChange={(quoteAr) => setContent({ quoteAr })} dir="rtl" rows={5} /><StudioField label="Citation" value={content.citation} onChange={(citation) => setContent({ citation })} placeholder="Author or source" /></div>;
+  if (block.type === 'quote') return <div className="studio-language-grid"><StudioText label="Quote · English" value={content.quote} onChange={(quote) => setContent({ quote })} rows={5} /><StudioText label="Quote · Arabic" value={content.quoteAr} onChange={(quoteAr) => setContent({ quoteAr })} dir="rtl" rows={5} /></div>;
   if (block.type === 'table') {
     const columns = Array.isArray(content.columns) ? content.columns : [];
     const rows = Array.isArray(content.rows) ? content.rows : [];
-    return <div className="studio-form-stack"><StudioText label="Column headings" value={columns.join(' | ')} onChange={(value) => setContent({ columns: value.split('|').map((item) => item.trim()).filter(Boolean) })} placeholder="Concept | Definition | Example" rows={2} /><StudioText label="Rows" value={rows.map((row) => row.join(' | ')).join('\n')} onChange={(value) => { const width = columns.length || 1; setContent({ rows: lineList(value).map((row) => row.split('|').map((cell) => cell.trim()).slice(0, width)) }); }} placeholder="Scarcity | Limited resources | Time and money" rows={9} help="Use | between cells and a new line for each row." /></div>;
+    return <div className="studio-form-stack"><StudioText label="Column headings" value={columns.join(' | ')} onChange={(value) => setContent({ columns: value.split('|').map((item) => item.trim()).filter(Boolean) })} placeholder="Concept | Definition | Example" rows={2} /><StudioText label="Rows" value={rows.map((row) => row.join(' | ')).join('\n')} onChange={(value) => { const nextColumns = columns.length || 1; setContent({ rows: lineList(value).map((row) => row.split('|').map((cell) => cell.trim()).slice(0, nextColumns)) }); }} placeholder="Scarcity | Limited resources | Time and money" rows={8} help="Use the pipe character to separate cells. One row per line." /></div>;
   }
-  if (block.type === 'formula') return <div className="studio-form-stack"><div className="studio-language-grid"><StudioField label="Formula · English" value={content.formula} onChange={(formula) => setContent({ formula })} placeholder="Fixed cost ÷ contribution margin" /><StudioField label="Formula · Arabic" value={content.formulaAr} onChange={(formulaAr) => setContent({ formulaAr })} placeholder="الصيغة" dir="rtl" /></div><LanguageFields label="Explanation" value={{ text: content.text, textAr: content.textAr }} onChange={setContent} /></div>;
-  if (block.type === 'comparison') return <div className="studio-form-grid"><StudioField label="Left title" value={content.leftTitle} onChange={(leftTitle) => setContent({ leftTitle })} placeholder="Demand movement" /><StudioField label="Right title" value={content.rightTitle} onChange={(rightTitle) => setContent({ rightTitle })} placeholder="Demand shift" /><StudioText label="Left points" value={linesText(content.leftItems)} onChange={(value) => setContent({ leftItems: lineList(value) })} rows={7} /><StudioText label="Right points" value={linesText(content.rightItems)} onChange={(value) => setContent({ rightItems: lineList(value) })} rows={7} /></div>;
-  if (block.type === 'timeline') return <JsonField label="Timeline events" value={{ events: content.events || [] }} onChange={(value) => setContent({ events: Array.isArray(value.events) ? value.events : [] })} help='Use: { "events": [{ "date": "Week 1", "title": "Topic", "text": "Details" }] }' />;
+  if (block.type === 'formula') return <div className="studio-form-stack"><div className="studio-language-grid"><StudioField label="Formula · English" value={content.formula} onChange={(formula) => setContent({ formula })} placeholder="Fixed cost ÷ contribution margin" /><StudioField label="Formula · Arabic" value={content.formulaAr} onChange={(formulaAr) => setContent({ formulaAr })} placeholder="الصيغة" /></div><LanguageFields label="Explanation" value={{ text: content.text, textAr: content.textAr }} onChange={setContent} /></div>;
+  if (block.type === 'comparison') return <div className="studio-form-grid"><StudioField label="Left title" value={content.leftTitle} onChange={(leftTitle) => setContent({ leftTitle })} placeholder="Demand movement" /><StudioField label="Right title" value={content.rightTitle} onChange={(rightTitle) => setContent({ rightTitle })} placeholder="Demand shift" /><StudioText label="Left points" value={linesText(content.leftItems)} onChange={(value) => setContent({ leftItems: lineList(value) })} rows={6} /><StudioText label="Right points" value={linesText(content.rightItems)} onChange={(value) => setContent({ rightItems: lineList(value) })} rows={6} /></div>;
+  if (block.type === 'timeline') return <JsonField label="Timeline events JSON" value={{ events: content.events || [] }} onChange={(value) => setContent({ events: Array.isArray(value.events) ? value.events : [] })} help="Example: { &quot;events&quot;: [{ &quot;date&quot;: &quot;Week 1&quot;, &quot;title&quot;: &quot;Topic&quot;, &quot;text&quot;: &quot;Details&quot; }] }" />;
   if (['link', 'video', 'audio'].includes(block.type)) return <div className="studio-form-grid"><StudioField label="HTTPS URL" value={content.url} onChange={(url) => setContent({ url })} placeholder="https://example.com/resource" help="Only HTTPS links are published." /><StudioField label="Display label" value={content.label} onChange={(label) => setContent({ label })} placeholder="Open lecture recording" /></div>;
-  if (block.type === 'image') return <div className="studio-form-grid"><StudioField label="Image HTTPS URL" value={content.url} onChange={(url) => setContent({ url })} placeholder="https://…" /><StudioField label="Alt text" value={content.alt} onChange={(alt) => setContent({ alt })} placeholder="Describe the image" /><StudioField label="Source / credit" value={content.source} onChange={(source) => setContent({ source })} /></div>;
+  if (block.type === 'image') return <div className="studio-form-grid"><StudioField label="Image HTTPS URL" value={content.url} onChange={(url) => setContent({ url })} placeholder="https://..." /><StudioField label="Alt text" value={content.alt} onChange={(alt) => setContent({ alt })} placeholder="Describe the image for accessibility" /><StudioField label="Source / credit" value={content.source} onChange={(source) => setContent({ source })} /></div>;
   if (block.type === 'drawing') return <DrawingPad value={content.imageData} onChange={(imageData) => setContent({ imageData })} />;
-  if (block.type === 'code') return <div className="studio-form-stack"><StudioField label="Language" value={content.language} onChange={(language) => setContent({ language })} placeholder="javascript" /><StudioText label="Code" value={content.code} onChange={(code) => setContent({ code })} rows={14} /></div>;
-  return <JsonField label="Custom block data" value={content.config || {}} onChange={(config) => setContent({ config })} help="Safe declarative JSON only. Code is never executed in the student site." />;
+  if (block.type === 'code') return <div className="studio-form-stack"><StudioField label="Language" value={content.language} onChange={(language) => setContent({ language })} placeholder="javascript" /><StudioText label="Code" value={content.code} onChange={(code) => setContent({ code })} rows={12} /></div>;
+  return <JsonField label="Custom block configuration" value={content.config || {}} onChange={(config) => setContent({ config })} help="Use safe declarative JSON. The public reader will never execute code from this field." />;
 }
 
-function BlockEditor({
-  block,
-  chapters,
-  siblings,
-  update,
-  duplicate,
-  remove,
-  moveUp,
-  moveDown,
-  first,
-  last,
-  onNotice,
-  onSelect,
-  onAdd,
-  onOpenFiles,
-  onOpenHtml,
-  onTogglePreview,
-  previewOpen,
-}) {
-  const changeType = (type) => update({ type, content: createBlankContentBlock(type).content });
-  if (['rich_text', 'presentation'].includes(block.type)) {
-    const isSlides = block.type === 'presentation';
-    return <article className={`office-block-editor office-block-editor--${isSlides ? 'powerpoint' : 'word'}`}>
-      <header className="office-titlebar">
-        <span className={`office-titlebar__app office-titlebar__app--${isSlides ? 'powerpoint' : 'word'}`} aria-hidden="true">{isSlides ? 'P' : 'W'}</span>
-        <div className="office-titlebar__name"><input value={block.title} onChange={(event) => update({ title: event.target.value })} placeholder={isSlides ? 'Untitled presentation' : 'Untitled document'} aria-label={isSlides ? 'Presentation name' : 'Document name'} /><small>{isSlides ? 'Presentation' : 'Document'} · saved inside this subject draft</small></div>
-        <label className="office-titlebar__switcher"><span>{isSlides ? 'Deck' : 'Page'}</span><select value={block.id} onChange={(event) => onSelect(event.target.value)}>{siblings.map((item, index) => <option key={item.id} value={item.id}>{index + 1}. {item.title || labelForBlock(item)}</option>)}</select></label>
-        <button type="button" className="office-titlebar__new" onClick={() => onAdd(isSlides ? 'presentation' : 'rich_text')}>＋ New {isSlides ? 'deck' : 'page'}</button>
-        <div className="office-titlebar__actions"><button type="button" onClick={moveUp} disabled={first} title="Move earlier">↑</button><button type="button" onClick={moveDown} disabled={last} title="Move later">↓</button><button type="button" onClick={duplicate}>Duplicate</button><button type="button" className="is-danger" onClick={remove}>Delete</button></div>
-      </header>
-      {isSlides
-        ? <PresentationEditor block={block} update={update} onNotice={onNotice} onOpenFiles={onOpenFiles} onTogglePreview={onTogglePreview} previewOpen={previewOpen} />
-        : <RichTextEditor block={block} update={update} onNotice={onNotice} onInsertBlock={onAdd} onOpenFiles={onOpenFiles} onOpenHtml={onOpenHtml} onTogglePreview={onTogglePreview} previewOpen={previewOpen} />}
-      <details className="office-placement"><summary>Course placement and bilingual metadata</summary><div className="studio-document-meta"><StudioField label="Title · Arabic" value={block.titleAr} onChange={(titleAr) => update({ titleAr })} placeholder="عنوان اختياري" dir="rtl" /><label className="studio-field"><span>Chapter</span><select value={block.chapterId || ''} onChange={(event) => update({ chapterId: event.target.value })}><option value="">Subject-wide</option>{chapters.map((chapter) => <option value={chapter.id} key={chapter.id}>{chapter.title}</option>)}</select></label><label className="studio-field"><span>Assessment</span><select value={block.section || 'course'} onChange={(event) => update({ section: event.target.value })}>{CHAPTER_SECTIONS.map((section) => <option value={section.id} key={section.id}>{section.label}</option>)}</select></label></div></details>
-    </article>;
-  }
-  return <article className={`studio-editor-card studio-editor-card--${block.type}`}>
-    <div className="studio-editor-card__header"><div><span className="studio-kicker">{block.type === 'presentation' ? 'PowerPoint-style canvas' : block.type === 'rich_text' ? 'Word-style canvas' : 'Content block'}</span><h3>{block.title || labelForBlock(block)}</h3></div><div className="studio-editor-card__actions"><button type="button" className="studio-tool-button" onClick={moveUp} disabled={first}>↑ Move</button><button type="button" className="studio-tool-button" onClick={moveDown} disabled={last}>↓ Move</button><button type="button" className="studio-tool-button" onClick={duplicate}>Duplicate</button><button type="button" className="studio-tool-button studio-tool-button--danger" onClick={remove}>Delete</button></div></div>
-    <div className="studio-document-meta">
-      {block.type !== 'presentation' ? <label className="studio-field"><span>Block type</span><select value={block.type} onChange={(event) => changeType(event.target.value)}>{BLOCK_TYPES.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label> : null}
-      <StudioField label="Title · English" value={block.title} onChange={(title) => update({ title })} placeholder="Optional title" />
-      <StudioField label="Title · Arabic" value={block.titleAr} onChange={(titleAr) => update({ titleAr })} placeholder="عنوان اختياري" dir="rtl" />
-      <label className="studio-field"><span>Chapter</span><select value={block.chapterId || ''} onChange={(event) => update({ chapterId: event.target.value })}><option value="">Subject-wide</option>{chapters.map((chapter) => <option value={chapter.id} key={chapter.id}>{chapter.title}</option>)}</select></label>
-      <label className="studio-field"><span>Assessment</span><select value={block.section || 'course'} onChange={(event) => update({ section: event.target.value })}>{CHAPTER_SECTIONS.map((section) => <option value={section.id} key={section.id}>{section.label}</option>)}</select></label>
-    </div>
-    <div className="studio-block-fields"><BlockFields block={block} update={update} onNotice={onNotice} /></div>
-  </article>;
-}
-
-function StudioOutline({ mode, blocks, selectedId, onSelect, onAdd, onMode }) {
-  const title = mode === 'slides' ? 'Slide decks' : mode === 'document' ? 'Document outline' : 'Workspace';
-  return <aside className="studio-outline">
-    <div className="studio-outline__heading"><div><span className="studio-kicker">{mode === 'slides' ? 'Presentations' : 'Pages'}</span><strong>{title}</strong></div>{['document', 'slides'].includes(mode) ? <button type="button" onClick={() => onAdd(mode === 'slides' ? 'presentation' : 'rich_text')} aria-label={mode === 'slides' ? 'Add presentation' : 'Add rich text'}>＋</button> : null}</div>
-    {['document', 'slides'].includes(mode) ? <div className="studio-outline__list">{blocks.map((block, index) => <button type="button" key={block.id} className={selectedId === block.id ? 'studio-outline-item is-active' : 'studio-outline-item'} onClick={() => onSelect(block.id)}><span>{iconForBlock(block)}</span><div><strong>{block.title || labelForBlock(block)}</strong><small>{String(index + 1).padStart(2, '0')} · {labelForBlock(block)}</small></div></button>)}{!blocks.length ? <div className="studio-outline__empty"><strong>No {mode === 'slides' ? 'decks' : 'blocks'} yet</strong><button type="button" onClick={() => onAdd(mode === 'slides' ? 'presentation' : 'rich_text')}>Create one</button></div> : null}</div> : <div className="studio-outline__utilities">{MODES.filter((item) => !['document', 'slides'].includes(item.id)).map((item) => <button type="button" key={item.id} className={mode === item.id ? 'is-active' : ''} onClick={() => onMode(item.id)}><span>{item.icon}</span><div><strong>{item.label}</strong><small>{item.description}</small></div></button>)}</div>}
-    <div className="studio-outline__footer"><span>{blocks.length} items</span><span>Auto theme</span></div>
-  </aside>;
-}
-
-function InsertMenu({ onAdd, onClose }) {
-  return <div className="studio-insert-menu"><div><strong>Insert content</strong><button type="button" onClick={onClose} aria-label="Close insert menu">×</button></div><div>{BLOCK_TYPES.map(([id, label, icon]) => <button type="button" key={id} onClick={() => { onAdd(id); onClose(); }}><span>{icon}</span>{label}</button>)}</div></div>;
+function BlockEditor({ block, chapters, update, duplicate, remove }) {
+  return <article className="studio-editor-card"><div className="studio-editor-card__header"><div><span className="eyebrow">Content block</span><h3>{BLOCK_TYPES.find(([id]) => id === block.type)?.[1] || 'Block'}</h3></div><div className="studio-editor-card__actions"><button type="button" className="studio-tool-button" onClick={duplicate}>Duplicate</button><button type="button" className="studio-tool-button studio-tool-button--danger" onClick={remove}>Delete</button></div></div><div className="studio-form-grid"><label className="studio-field"><span>Block type</span><select value={block.type} onChange={(event) => update({ type: event.target.value })}>{BLOCK_TYPES.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><StudioField label="Order" type="number" min="0" value={block.order} onChange={(value) => update({ order: Number(value) || 0 })} /><label className="studio-field"><span>Place under chapter</span><select value={block.chapterId || ''} onChange={(event) => update({ chapterId: event.target.value })}><option value="">Subject-wide</option>{chapters.map((chapter) => <option value={chapter.id} key={chapter.id}>{chapter.title}</option>)}</select></label><label className="studio-field"><span>Assessment section</span><select value={block.section || 'course'} onChange={(event) => update({ section: event.target.value })}>{CHAPTER_SECTIONS.map((section) => <option value={section.id} key={section.id}>{section.label}</option>)}</select></label><StudioField label="Block title · English" value={block.title} onChange={(title) => update({ title })} placeholder="Optional title" /><StudioField label="Block title · Arabic" value={block.titleAr} onChange={(titleAr) => update({ titleAr })} placeholder="عنوان اختياري" /></div><div className="studio-block-fields"><BlockFields block={block} update={update} /></div></article>;
 }
 
 function ToolEditor({ tool, chapters, update, remove }) {
-  return <article className="studio-tool-card"><div className="studio-editor-card__header"><div><span className="studio-kicker">Subject tool</span><h3>{tool.name || 'Untitled tool'}</h3></div><button type="button" className="studio-tool-button studio-tool-button--danger" onClick={remove}>Delete</button></div><div className="studio-form-grid"><StudioField label="Tool name · English" value={tool.name} onChange={(name) => update({ name })} /><StudioField label="Tool name · Arabic" value={tool.nameAr} onChange={(nameAr) => update({ nameAr })} dir="rtl" /><label className="studio-field"><span>Tool type</span><select value={tool.type} onChange={(event) => update({ type: event.target.value })}>{TOOL_TYPES.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><label className="studio-field"><span>Chapter</span><select value={tool.chapterId || ''} onChange={(event) => update({ chapterId: event.target.value })}><option value="">Subject-wide</option>{chapters.map((chapter) => <option value={chapter.id} key={chapter.id}>{chapter.title}</option>)}</select></label><StudioText label="Description · English" value={tool.description} onChange={(description) => update({ description })} rows={3} /><StudioText label="Description · Arabic" value={tool.descriptionAr} onChange={(descriptionAr) => update({ descriptionAr })} dir="rtl" rows={3} /><JsonField label="Tool configuration" value={tool.config} onChange={(config) => update({ config })} help="Declarative settings only; no executable code." /></div></article>;
+  return <article className="studio-tool-card"><div className="studio-editor-card__header"><div><span className="eyebrow">Subject tool</span><h3>{tool.name || 'Untitled tool'}</h3></div><button type="button" className="studio-tool-button studio-tool-button--danger" onClick={remove}>Delete</button></div><div className="studio-form-grid"><StudioField label="Tool name · English" value={tool.name} onChange={(name) => update({ name })} placeholder="Supply and demand lab" /><StudioField label="Tool name · Arabic" value={tool.nameAr} onChange={(nameAr) => update({ nameAr })} placeholder="اسم الأداة" /><label className="studio-field"><span>Tool type</span><select value={tool.type} onChange={(event) => update({ type: event.target.value })}>{TOOL_TYPES.map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label><label className="studio-field"><span>Chapter</span><select value={tool.chapterId || ''} onChange={(event) => update({ chapterId: event.target.value })}><option value="">Subject-wide</option>{chapters.map((chapter) => <option value={chapter.id} key={chapter.id}>{chapter.title}</option>)}</select></label><StudioText label="Description · English" value={tool.description} onChange={(description) => update({ description })} rows={3} /><StudioText label="Description · Arabic" value={tool.descriptionAr} onChange={(descriptionAr) => update({ descriptionAr })} dir="rtl" rows={3} /><JsonField label="Tool configuration JSON" value={tool.config} onChange={(config) => update({ config })} help="Use declarative configuration only. This is not an executable-code editor." /></div></article>;
 }
 
-function ToolsPanel({ subject, updateSubject }) {
-  const tools = subject.tools || [];
-  const customTypes = subject.customTypes || [];
-  const addTool = () => updateSubject({ tools: [...tools, { ...createBlankTool(), chapterId: subject.modules[0]?.id || '', order: tools.length }] });
-  const addCustomType = () => updateSubject({ customTypes: [...customTypes, { id: `custom-type-${Date.now()}`, name: 'New custom type', nameAr: '', schema: { fields: [] } }] });
-  return <div className="studio-tools-panel"><div className="studio-section-heading"><div><span className="studio-kicker">Reusable interactions</span><h3>Subject tools</h3><p>Configure calculators, formula practice, graphs, matching activities, timelines, and your own structured tool types.</p></div><button type="button" className="primary-button" onClick={addTool}>+ Add tool</button></div>{tools.map((tool) => <ToolEditor key={tool.id} tool={tool} chapters={subject.modules} update={(patch) => updateSubject({ tools: updateAt(tools, tool.id, patch) })} remove={() => updateSubject({ tools: tools.filter((item) => item.id !== tool.id) })} />)}{!tools.length ? <div className="studio-stage-empty"><strong>No interactive tools yet.</strong><button type="button" className="secondary-button" onClick={addTool}>Create first tool</button></div> : null}<section className="studio-custom-types"><div className="studio-section-heading"><div><span className="studio-kicker">Extensible structure</span><h3>Custom content types</h3><p>Define reusable data fields without writing code.</p></div><button type="button" className="secondary-button" onClick={addCustomType}>+ Add type</button></div>{customTypes.map((type) => <article className="studio-tool-card" key={type.id}><div className="studio-form-grid"><StudioField label="Type name · English" value={type.name} onChange={(name) => updateSubject({ customTypes: updateAt(customTypes, type.id, { name }) })} /><StudioField label="Type name · Arabic" value={type.nameAr} onChange={(nameAr) => updateSubject({ customTypes: updateAt(customTypes, type.id, { nameAr }) })} dir="rtl" /><JsonField label="Field schema" value={type.schema} onChange={(schema) => updateSubject({ customTypes: updateAt(customTypes, type.id, { schema }) })} /></div><button type="button" className="studio-tool-button studio-tool-button--danger" onClick={() => updateSubject({ customTypes: customTypes.filter((item) => item.id !== type.id) })}>Delete type</button></article>)}</section></div>;
-}
-
-export function ContentStudio({ subject, updateSubject, password, onMessage, onError }) {
-  const [mode, setMode] = useState('document');
+export function ContentStudio({ subject, updateSubject }) {
   const [selectedBlockId, setSelectedBlockId] = useState(null);
-  const [insertOpen, setInsertOpen] = useState(false);
-  const [localNotice, setLocalNotice] = useState('');
-  const [previewOpen, setPreviewOpen] = useState(true);
+  const [showBlockMenu, setShowBlockMenu] = useState(false);
+  const [showTypeEditor, setShowTypeEditor] = useState(false);
   const blocks = subject?.contentBlocks || [];
-  const visibleBlocks = useMemo(() => blocks.filter((block) => mode === 'slides' ? block.type === 'presentation' : mode === 'document' ? block.type !== 'presentation' : true), [blocks, mode]);
+  const tools = subject?.tools || [];
+  const chapters = subject?.modules || [];
 
   useEffect(() => {
-    if (!visibleBlocks.some((block) => block.id === selectedBlockId)) setSelectedBlockId(visibleBlocks[0]?.id || null);
-  }, [subject?.id, mode, selectedBlockId, visibleBlocks]);
+    if (!blocks.some((block) => block.id === selectedBlockId)) setSelectedBlockId(blocks[0]?.id || null);
+  }, [subject?.id, blocks.length, selectedBlockId]);
 
-  if (!subject) return <div className="admin-tab"><div className="admin-empty"><span className="admin-empty__icon">✦</span><strong>Select a subject first</strong><p>Every document, presentation, imported page, file, and tool stays inside its selected subject.</p></div></div>;
+  if (!subject) return <div className="admin-tab"><div className="admin-empty"><span className="admin-empty__icon">✦</span><strong>Select a subject first</strong><p>Every block and tool in this studio belongs to one subject, so content never leaks across courses.</p></div></div>;
 
-  const notify = (message) => {
-    setLocalNotice(message);
-    onMessage?.(message);
-    window.setTimeout(() => setLocalNotice(''), 4500);
-  };
-  const fail = (message) => {
-    setLocalNotice('');
-    onError?.(message);
-  };
-  const addBlock = (type, preparedBlock = null) => {
-    const block = preparedBlock || createBlankContentBlock(type);
+  const addBlock = (type) => {
+    const block = createBlankContentBlock(type);
     block.order = blocks.length;
-    block.chapterId = block.chapterId || subject.modules[0]?.id || '';
-    block.section = block.section || subject.modules[0]?.section || 'course';
+    block.chapterId = chapters[0]?.id || '';
     updateSubject({ contentBlocks: [...blocks, block] });
     setSelectedBlockId(block.id);
-    setMode(block.type === 'presentation' ? 'slides' : 'document');
-    notify(`${labelForBlock(block)} added to ${subject.code}.`);
+    setShowBlockMenu(false);
   };
   const updateBlock = (id, patch) => updateSubject({ contentBlocks: updateAt(blocks, id, patch) });
   const duplicateBlock = (block) => {
     const copy = clone(block);
     copy.id = `${block.id}-copy-${Date.now()}`;
-    copy.title = `${block.title || labelForBlock(block)} copy`;
     copy.order = blocks.length;
-    if (copy.type === 'presentation') copy.content.slides = copy.content.slides.map((slide, index) => ({ ...slide, id: `${copy.id}-slide-${index + 1}` }));
     updateSubject({ contentBlocks: [...blocks, copy] });
     setSelectedBlockId(copy.id);
-    notify('A separate editable copy was created.');
   };
   const removeBlock = (id) => {
     const next = blocks.filter((block) => block.id !== id).map((block, index) => ({ ...block, order: index }));
     updateSubject({ contentBlocks: next });
-    notify('Content block removed from the draft.');
   };
-  const moveBlock = (block, direction) => {
-    const sourceIndex = blocks.findIndex((item) => item.id === block.id);
-    const visibleIndex = visibleBlocks.findIndex((item) => item.id === block.id);
-    const target = visibleBlocks[visibleIndex + direction];
-    if (sourceIndex < 0 || !target) return;
-    const targetIndex = blocks.findIndex((item) => item.id === target.id);
+  const moveBlock = (index, direction) => {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= blocks.length) return;
     const next = [...blocks];
-    [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
-    updateSubject({ contentBlocks: next.map((item, index) => ({ ...item, order: index })) });
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    updateSubject({ contentBlocks: next.map((block, itemIndex) => ({ ...block, order: itemIndex })) });
   };
-  const importHtml = (result) => {
-    const imported = result.blocks.map((block, index) => ({ ...block, order: blocks.length + index }));
-    updateSubject({ contentBlocks: [...blocks, ...imported] });
-    setSelectedBlockId(imported[0]?.id || null);
-    setMode('document');
-    notify(`${result.title} was converted into ${imported.length} AG Project blocks.`);
-  };
-  const selected = blocks.find((block) => block.id === selectedBlockId) || null;
-  const selectedVisibleIndex = visibleBlocks.findIndex((block) => block.id === selectedBlockId);
+  const addTool = () => updateSubject({ tools: [...tools, { ...createBlankTool(), chapterId: chapters[0]?.id || '', order: tools.length }] });
+  const addCustomType = () => updateSubject({ customTypes: [...(subject.customTypes || []), { id: `custom-type-${Date.now()}`, name: 'New custom type', nameAr: '', schema: { fields: [] } }] });
 
-  return <div className="admin-tab content-studio content-studio--advanced">
-    <header className="studio-topbar"><div><span className="studio-kicker">AG Project · Advanced CMS</span><h2>{subject.code} Content Studio</h2><p>{subject.name}</p></div><div className="studio-topbar__status"><span className="studio-live-dot" /><strong>Live preview connected</strong><small>{blocks.length} blocks · {subject.resources.length} files</small></div></header>
-    <nav className="studio-modebar" aria-label="Content Studio modes">{MODES.map((item) => <button type="button" key={item.id} className={mode === item.id ? 'is-active' : ''} onClick={() => setMode(item.id)}><span>{item.icon}</span><div><strong>{item.label}</strong><small>{item.description}</small></div></button>)}<div className="studio-modebar__quick"><button type="button" onClick={() => addBlock('presentation')}>+ New deck</button><button type="button" onClick={() => setInsertOpen((current) => !current)}>+ Insert</button>{insertOpen ? <InsertMenu onAdd={addBlock} onClose={() => setInsertOpen(false)} /> : null}</div></nav>
-    {localNotice ? <div className="studio-notice" aria-live="polite">✓ {localNotice}</div> : null}
-    <div className={`studio-shell studio-shell--${mode}${previewOpen ? '' : ' studio-shell--preview-hidden'}`}>
-      {!['document', 'slides'].includes(mode) ? <StudioOutline mode={mode} blocks={visibleBlocks} selectedId={selectedBlockId} onSelect={setSelectedBlockId} onAdd={addBlock} onMode={setMode} /> : null}
-      <section className="studio-workarea">
-        {['document', 'slides'].includes(mode) ? selected ? <BlockEditor key={selected.id} block={selected} chapters={subject.modules} siblings={visibleBlocks} update={(patch) => updateBlock(selected.id, patch)} duplicate={() => duplicateBlock(selected)} remove={() => removeBlock(selected.id)} moveUp={() => moveBlock(selected, -1)} moveDown={() => moveBlock(selected, 1)} first={selectedVisibleIndex === 0} last={selectedVisibleIndex === visibleBlocks.length - 1} onNotice={notify} onSelect={setSelectedBlockId} onAdd={addBlock} onOpenFiles={() => setMode('assets')} onOpenHtml={() => setMode('html')} onTogglePreview={() => setPreviewOpen((current) => !current)} previewOpen={previewOpen} /> : <div className="studio-stage-empty"><span>{mode === 'slides' ? 'P' : 'W'}</span><strong>{mode === 'slides' ? 'Build your first presentation.' : 'Start a clean course document.'}</strong><p>{mode === 'slides' ? 'Create and arrange themed slides with bilingual content and presenter notes.' : 'Add rich text, headings, tables, formulas, media, drawings, and reusable study blocks.'}</p><button type="button" className="primary-button" onClick={() => addBlock(mode === 'slides' ? 'presentation' : 'rich_text')}>{mode === 'slides' ? 'Create slide deck' : 'Create document block'}</button></div> : null}
-        {mode === 'html' ? <HtmlImportPanel subject={subject} onImport={importHtml} onError={fail} /> : null}
-        {mode === 'assets' ? <AssetUploader subject={subject} password={password} onAddBlock={(block) => addBlock(block.type, block)} updateSubject={updateSubject} onError={fail} onNotice={notify} /> : null}
-        {mode === 'tools' ? <ToolsPanel subject={subject} updateSubject={updateSubject} /> : null}
-      </section>
-      {previewOpen ? <LivePreview subject={subject} selectedBlockId={selectedBlockId} /> : null}
+  return <div className="admin-tab content-studio">
+    <div className="admin-tab-heading"><div><span className="eyebrow">Advanced subject CMS</span><h2>Content Studio</h2><p>Build this subject as a professional course document. Every block, question, tool, and custom type stays scoped to <strong>{subject.code}</strong>.</p></div><div className="studio-header-actions"><button type="button" className="secondary-button" onClick={() => setShowTypeEditor((current) => !current)}>Custom types</button><div className="studio-add-wrap"><button type="button" className="primary-button" onClick={() => setShowBlockMenu((current) => !current)}>+ Add content block</button>{showBlockMenu ? <div className="studio-add-menu">{BLOCK_TYPES.map(([id, label]) => <button type="button" key={id} onClick={() => addBlock(id)}>{label}</button>)}</div> : null}</div></div></div>
+    <div className="studio-capabilities"><span>English + Arabic</span><span>Tables + formulas</span><span>Drawings</span><span>Safe media links</span><span>Chapter / Midterm / Final</span><span>Declarative tools</span></div>
+    <div className="studio-layout">
+      <aside className="studio-block-rail"><div className="studio-block-rail__heading"><div><span className="eyebrow">Blocks</span><strong>{blocks.length} blocks</strong></div><button type="button" className="round-button" onClick={() => addBlock('paragraph')} aria-label="Add paragraph">＋</button></div>{blocks.map((block, index) => <button type="button" className={block.id === selectedBlockId ? 'studio-block-item studio-block-item--active' : 'studio-block-item'} key={block.id} onClick={() => setSelectedBlockId(block.id)}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{block.title || BLOCK_TYPES.find(([id]) => id === block.type)?.[1]}</strong><small>{chapters.find((chapter) => chapter.id === block.chapterId)?.title || 'Subject-wide'}</small></div></button>)}{!blocks.length ? <p className="studio-rail-empty">Add a block to begin this subject’s notes.</p> : null}</aside>
+      <div className="studio-stage">{selectedBlockId ? (() => { const block = blocks.find((item) => item.id === selectedBlockId); const index = blocks.findIndex((item) => item.id === selectedBlockId); return block ? <><div className="studio-reorder"><span>Selected block {index + 1} of {blocks.length}</span><div><button type="button" className="studio-tool-button" onClick={() => moveBlock(index, -1)} disabled={index === 0}>Move up</button><button type="button" className="studio-tool-button" onClick={() => moveBlock(index, 1)} disabled={index === blocks.length - 1}>Move down</button></div></div><BlockEditor block={block} chapters={chapters} update={(patch) => updateBlock(block.id, patch)} duplicate={() => duplicateBlock(block)} remove={() => removeBlock(block.id)} /></> : null; })() : <div className="studio-stage-empty"><span>✦</span><strong>Your subject document starts here.</strong><p>Add paragraphs, tables, formulas, diagrams, drawings, links, or any other block from the menu.</p><button type="button" className="primary-button" onClick={() => addBlock('paragraph')}>Add first paragraph</button></div>}</div>
     </div>
+    <section className="studio-tools-section"><div className="admin-tab-heading"><div><span className="eyebrow">Reusable subject tools</span><h3>Interactive tools for {subject.code}</h3><p>Add a calculator, graph, formula practice, matching activity, timeline, or a safe custom configuration. The site can render new tool types once their reader is implemented.</p></div><button type="button" className="secondary-button" onClick={addTool}>+ Add subject tool</button></div>{tools.map((tool) => <ToolEditor key={tool.id} tool={tool} chapters={chapters} update={(patch) => updateSubject({ tools: updateAt(tools, tool.id, patch) })} remove={() => updateSubject({ tools: tools.filter((item) => item.id !== tool.id) })} />)}{!tools.length ? <div className="studio-inline-empty">No custom tools yet. Add one when this subject needs an interactive calculator, graph, or activity.</div> : null}</section>
+    {showTypeEditor ? <section className="studio-tools-section"><div className="admin-tab-heading"><div><span className="eyebrow">Extensible schema</span><h3>Custom content types</h3><p>Define the fields you want for this subject, then keep the structure in JSON for reliable import/export.</p></div><button type="button" className="secondary-button" onClick={addCustomType}>+ Add custom type</button></div>{(subject.customTypes || []).map((type) => <article className="studio-tool-card" key={type.id}><div className="studio-form-grid"><StudioField label="Type name · English" value={type.name} onChange={(name) => updateSubject({ customTypes: updateAt(subject.customTypes || [], type.id, { name }) })} /><StudioField label="Type name · Arabic" value={type.nameAr} onChange={(nameAr) => updateSubject({ customTypes: updateAt(subject.customTypes || [], type.id, { nameAr }) })} /><JsonField label="Field schema" value={type.schema} onChange={(schema) => updateSubject({ customTypes: updateAt(subject.customTypes || [], type.id, { schema }) })} /></div><button type="button" className="studio-tool-button studio-tool-button--danger" onClick={() => updateSubject({ customTypes: (subject.customTypes || []).filter((item) => item.id !== type.id) })}>Delete type</button></article>)}</section> : null}
   </div>;
 }
